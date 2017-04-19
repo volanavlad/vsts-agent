@@ -4,6 +4,9 @@ using System;
 using System.IO;
 using Microsoft.TeamFoundation.Build.WebApi;
 using Microsoft.VisualStudio.Services.Agent.Worker.Maintenance;
+using System.Linq;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
 {
@@ -86,6 +89,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 // Convert legacy format to the new format if required.
                 newConfig = ConvertToNewFormat(executionContext, endpoint, existingConfig);
 
+                // Fill out repository type if it's not there.
+                // repository type is a new property introduced for maintenance job
+                if (string.IsNullOrEmpty(newConfig.RepositoryType))
+                {
+                    newConfig.RepositoryType = endpoint.Type;
+                }
+
                 // For existing tracking config files, update the job run properties.
                 Trace.Verbose("Updating job run properties.");
                 trackingManager.UpdateJobRunProperties(executionContext, newConfig, trackingFile);
@@ -133,7 +143,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             return newConfig;
         }
 
-        public void RunMaintenanceOperation(IExecutionContext executionContext)
+        public async Task RunMaintenanceOperation(IExecutionContext executionContext)
         {
             Trace.Entering();
             ArgUtil.NotNull(executionContext, nameof(executionContext));
@@ -155,6 +165,68 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
 
             // delete unused build directories
             trackingManager.DisposeCollectedGarbage(executionContext);
+
+            // give source provider a chance to run maintenance operation
+            bool optimizeBuildDir = executionContext.Variables.GetBoolean("maintenance.workingdirectory.optimize") ?? false;
+            if (optimizeBuildDir)
+            {
+                Trace.Info("Scan all SourceFolder tracking files.");
+                string searchRoot = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Work), Constants.Build.Path.SourceRootMappingDirectory);
+                if (!Directory.Exists(searchRoot))
+                {
+                    executionContext.Output(StringUtil.Loc("GCDirNotExist", searchRoot));
+                    return;
+                }
+
+                // <tracking config, tracking file path>
+                List<Tuple<TrackingConfig, string>> optimizeTrackingFiles = new List<Tuple<TrackingConfig, string>>();
+                var allTrackingFiles = Directory.EnumerateFiles(searchRoot, Constants.Build.Path.TrackingConfigFile, SearchOption.AllDirectories);
+                Trace.Verbose($"Find {allTrackingFiles.Count()} tracking files.");
+                foreach (var trackingFile in allTrackingFiles)
+                {
+                    executionContext.Output(StringUtil.Loc("EvaluateTrackingFile", trackingFile));
+                    TrackingConfigBase tracking = trackingManager.LoadIfExists(executionContext, trackingFile);
+
+                    // detect whether the tracking file is in new format.
+                    TrackingConfig newTracking = tracking as TrackingConfig;
+                    if (newTracking == null)
+                    {
+                        executionContext.Output(StringUtil.Loc("GCOldFormatTrackingFile", trackingFile));
+                    }
+                    else if (string.IsNullOrEmpty(newTracking.RepositoryType))
+                    {
+                        // repository not been set.
+                        executionContext.Output(StringUtil.Loc("SkipTrackingFileWithoutRepoType", trackingFile));
+                    }
+                    else
+                    {
+                        optimizeTrackingFiles.Add(new Tuple<TrackingConfig, string>(newTracking, trackingFile));
+                    }
+                }
+
+                // Sort the all tracking file ASC by last maintenance attempted time                
+                foreach (var trackingFile in optimizeTrackingFiles.OrderBy(x => x.Item1.LastMaintenanceAttemptedOn))
+                {
+                    try
+                    {
+                        trackingManager.MaintenanceStarted(trackingFile.Item1, trackingFile.Item2);
+                        var extensionManager = HostContext.GetService<IExtensionManager>();
+                        ISourceProvider sourceProvider = extensionManager.GetExtensions<ISourceProvider>().FirstOrDefault(x => string.Equals(x.RepositoryType, trackingFile.Item1.RepositoryType, StringComparison.OrdinalIgnoreCase));
+                        if (sourceProvider != null)
+                        {
+                            string repositoryPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Work), trackingFile.Item1.SourcesDirectory);
+                            await sourceProvider.RunMaintenanceOperations(executionContext, repositoryPath, executionContext.CancellationToken);
+                        }
+
+                        trackingManager.MaintenanceCompleted(trackingFile.Item1, trackingFile.Item2);
+                    }
+                    catch (Exception ex)
+                    {
+                        executionContext.Error(StringUtil.Loc("ErrorDuringBuildGC", trackingFile));
+                        executionContext.Error(ex);
+                    }
+                }
+            }
         }
 
         private TrackingConfig ConvertToNewFormat(
@@ -202,6 +274,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 executionContext,
                 legacyConfig,
                 sourcesDirectoryNameOnly,
+                endpoint.Type,
                 // The legacy artifacts directory has been deleted at this point - see above - so
                 // switch the configuration to using the new naming scheme.
                 useNewArtifactsDirectoryName: true);
