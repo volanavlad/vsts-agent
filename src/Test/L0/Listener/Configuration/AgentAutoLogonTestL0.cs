@@ -72,7 +72,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public void TestInteractiveSessionUnConfigure()
+        public void TestAutoLogonUnConfigure()
         {
             //strategy-
             //1. fill some existing values in the registry
@@ -98,7 +98,41 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 
                 //original values were reverted
                 RegistryVerificationForUnConfigure(hc);
-                Assert.True(_stopListenerCalled, "Stop listener was not called as part of unconfigure.");
+            }
+        }
+
+        [Fact]
+        [Trait("Level", "L0")]
+        [Trait("Category", "Agent")]
+        public void TestAutoLogonUnConfigureForDifferentUser()
+        {
+            //strategy-
+            //1. fill some existing values in the registry
+            //2. run configure
+            //3. make sure the old values are there in the backup
+            //4. unconfigure
+            //5. make sure original values are reverted back
+
+            using (var hc = new TestHostContext(this))
+            {
+                SetupTestEnv(hc);
+
+                //override behavior
+                _windowsServiceHelper.Setup(x => x.HasActiveSession(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
+
+                SetupRegistrySettings(hc, _sid);
+
+                var iConfigManager = new AutoLogonConfigurationManager();
+                iConfigManager.Initialize(hc);
+                iConfigManager.Configure(_command);
+
+                //make sure the backup was taken for the keys
+                RegistryVerificationForUnConfigure(hc, sid:_sid, checkBackupKeys:true);
+
+                iConfigManager.UnConfigure();
+
+                //original values were reverted
+                RegistryVerificationForUnConfigure(hc, sid:_sid);
             }
         }
 
@@ -139,6 +173,24 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             expectedValue = "xyz";
             validationPassed = string.Equals(expectedValue, autologonPwdValue, StringComparison.OrdinalIgnoreCase);
             Assert.True(validationPassed, $"UnConfigure (verifying backupkeys - {checkBackupKeys}) : {WellKnownRegistries.AutoLogonPassword} Key value is not correct. Expected - {expectedValue} Actual - {autologonPwdValue}");
+
+            //when done with reverting back the original settings we need to make sure we dont leave behind any extra setting
+            if(!checkBackupKeys)
+            {
+                //user specific
+                var startupProcessPath = string.Format($@"{userRegistryRootPath}\{RegistryConstants.RegPaths.StartupProcess}");
+                keyName = RegistryConstants.KeyNames.StartupProcess;
+                var startupProcessValue = regManager.GetKeyValue(startupProcessPath, keyName);
+                validationPassed = string.IsNullOrEmpty(startupProcessValue);
+                Assert.True(validationPassed, $"UnConfigure failed. Startup process path key should have been removed.");
+
+                //machine specific
+                var legalNoticeCaptionPath = string.Format($@"{RegistryConstants.LocalMachineRootPath}\{RegistryConstants.RegPaths.LegalNotice}");
+                keyName = RegistryConstants.KeyNames.LegalNoticeCaption;
+                var legalNoticeCaptionValue = regManager.GetKeyValue(legalNoticeCaptionPath, keyName);
+                validationPassed = string.IsNullOrEmpty(legalNoticeCaptionValue);
+                Assert.True(validationPassed, $"UnConfigure failed. Legal notice caption should have been removed.");
+            }
         }
 
         private void SetupRegistrySettings(TestHostContext hc, string sid = null)
@@ -192,7 +244,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             _processInvoker = new Mock<IProcessInvoker>();
             hc.EnqueueInstance<IProcessInvoker>(_processInvoker.Object);
             hc.EnqueueInstance<IProcessInvoker>(_processInvoker.Object);
-            hc.EnqueueInstance<IProcessInvoker>(_processInvoker.Object);
+
             _processInvoker.Setup(x => x.ExecuteAsync(
                                                 It.IsAny<String>(), 
                                                 "powercfg.exe", 
@@ -206,13 +258,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                                                 "/Change monitor-timeout-dc 0", 
                                                 null,
                                                 It.IsAny<CancellationToken>())).Returns(Task.FromResult<int>(SetPowerCfgFlags(false)));
-
-            _processInvoker.Setup(x => x.ExecuteAsync(
-                                                It.IsAny<String>(),
-                                                It.IsAny<String>(),
-                                                "stopagentlistener -1",
-                                                null,
-                                                It.IsAny<CancellationToken>())).Returns(Task.FromResult<int>(CallStopListener()));
 
             _mockRegManager = new MockRegistryManager();
             hc.SetSingleton<IWindowsRegistryManager>(_mockRegManager);
@@ -236,12 +281,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             {
                 _powerCfgCalledForDCOption = true;
             }
-            return 0;
-        }
-
-        private int CallStopListener()
-        {
-            _stopListenerCalled = true;
             return 0;
         }
 
@@ -331,12 +370,15 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         }
         
         public void DeleteKey(RegistryScope scope, string path, string keyName)
-        {
+        {            
             var completePath = path;
             switch(scope)
             {
                 case RegistryScope.CurrentUser :
                     completePath = string.Format($@"{RegistryConstants.CurrentUserRootPath}\{path}");
+                    break;
+                case RegistryScope.DifferentUser :
+                    completePath = string.Format(RegistryConstants.DifferentUserRootPath, path);
                     break;
                 case RegistryScope.LocalMachine:
                     completePath = string.Format($@"{RegistryConstants.LocalMachineRootPath}\{path}");

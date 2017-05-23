@@ -46,22 +46,22 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
         }
 
-        public void RevertBackOriginalRegistrySettings()
+        public void RevertOriginalRegistrySettings()
         {
             foreach(var regSetting in _standardRegistries)
             {
-                RevertBackOriginalRegistry(regSetting.Key);
+                RevertOriginalRegistry(regSetting.Key);
             }
 
             //auto-logon
-            RevertBackOriginalRegistry(WellKnownRegistries.AutoLogonUserName);
-            RevertBackOriginalRegistry(WellKnownRegistries.AutoLogonDomainName);
-            RevertBackOriginalRegistry(WellKnownRegistries.AutoLogonPassword);
-            RevertBackOriginalRegistry(WellKnownRegistries.AutoLogonCount);
-            RevertBackOriginalRegistry(WellKnownRegistries.AutoLogon);
+            RevertOriginalRegistry(WellKnownRegistries.AutoLogonUserName);
+            RevertOriginalRegistry(WellKnownRegistries.AutoLogonDomainName);
+            RevertOriginalRegistry(WellKnownRegistries.AutoLogonPassword);
+            RevertOriginalRegistry(WellKnownRegistries.AutoLogonCount);
+            RevertOriginalRegistry(WellKnownRegistries.AutoLogon);
 
             //startup process
-            RevertBackOriginalRegistry(WellKnownRegistries.StartupProcess);
+            RevertOriginalRegistry(WellKnownRegistries.StartupProcess);
         }
 
         public void UpdateAutoLogonSettings(string userName, string domainName)
@@ -176,25 +176,37 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                                 ? RegistryConstants.GetBackupKeyName(targetRegistry) 
                                 : RegistryConstants.GetActualKeyNameForWellKnownRegistry(targetRegistry);
 
+            /* .net Registry class works in following way based on the hive
+            LocalMachine -> Open subkey from Registry.LocalMachine and the subkey path should not be having HKLM in it.
+            CurrentUser  -> Open subkey from Registry.CurrentUser and the subkey path should not be having HKLM in it.
+            Different user -> Open subkey from Registry.Users and the subkey path should start with the security ID of the user followed by the original path.
+            Once you have opened the subkey you can call .DeleteValue() by suplying the key name.
+             */
+            string regPathTemplate = string.IsNullOrEmpty(_userSecurityId)
+                                        ? "{0}"
+                                        : $@"{_userSecurityId}\{{0}}";
+                                        
+            var regScope = string.IsNullOrEmpty(_userSecurityId) ? RegistryScope.CurrentUser : RegistryScope.DifferentUser;
+
             switch (targetRegistry)
             {
                 //user specific registry settings
                 case WellKnownRegistries.ScreenSaver :
-                    _registryManager.DeleteKey(RegistryScope.CurrentUser, RegistryConstants.RegPaths.ScreenSaver, regKeyName);
+                    _registryManager.DeleteKey(regScope, string.Format(regPathTemplate, RegistryConstants.RegPaths.ScreenSaver), regKeyName);
                     break;
-                case WellKnownRegistries.ScreenSaverDomainPolicy:
-                    _registryManager.DeleteKey(RegistryScope.CurrentUser, RegistryConstants.RegPaths.ScreenSaverDomainPolicy, regKeyName);
+                case WellKnownRegistries.ScreenSaverDomainPolicy :
+                    _registryManager.DeleteKey(regScope, string.Format(regPathTemplate, RegistryConstants.RegPaths.ScreenSaverDomainPolicy), regKeyName);
                     break;
                 case WellKnownRegistries.StartupProcess:
-                    _registryManager.DeleteKey(RegistryScope.CurrentUser, RegistryConstants.RegPaths.StartupProcess, regKeyName);
+                    _registryManager.DeleteKey(regScope, string.Format(regPathTemplate, RegistryConstants.RegPaths.StartupProcess), regKeyName);
                     break;
 
-                //machine specific registry settings         
+                //machine specific registry settings
                 case WellKnownRegistries.AutoLogon :
-                case WellKnownRegistries.AutoLogonUserName:
+                case WellKnownRegistries.AutoLogonUserName :
                 case WellKnownRegistries.AutoLogonDomainName :
-                case WellKnownRegistries.AutoLogonPassword:
-                case WellKnownRegistries.AutoLogonCount:
+                case WellKnownRegistries.AutoLogonPassword :
+                case WellKnownRegistries.AutoLogonCount :
                     _registryManager.DeleteKey(RegistryScope.LocalMachine, RegistryConstants.RegPaths.AutoLogon, regKeyName);
                     break;
 
@@ -211,10 +223,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
         }
 
-        private void RevertBackOriginalRegistry(WellKnownRegistries targetRegistry)
+        private void RevertOriginalRegistry(WellKnownRegistries targetRegistry)
         {
             var regPath = GetRegistryKeyPath(targetRegistry, _userSecurityId);
-            RevertBackOriginalRegistryInternal(regPath, targetRegistry);
+            RevertOriginalRegistryInternal(regPath, targetRegistry);
         }
 
         private string GetRegistryKeyPath(WellKnownRegistries targetRegistry, string userSid = null)
@@ -252,7 +264,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
         }
 
-        private void RevertBackOriginalRegistryInternal(string regPath, WellKnownRegistries targetRegistry)
+        private void RevertOriginalRegistryInternal(string regPath, WellKnownRegistries targetRegistry)
         {
             var originalKeyName = RegistryConstants.GetActualKeyNameForWellKnownRegistry(targetRegistry);
             var backupKeyName = RegistryConstants.GetBackupKeyName(targetRegistry);
@@ -264,7 +276,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 return;
             }
 
-            //revert back the original value
+            //revert the original value
             _registryManager.SetKeyValue(regPath, originalKeyName, originalValue);
             //delete the backup key
             DeleteRegistry(targetRegistry, true);
@@ -315,6 +327,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     public enum RegistryScope
     {
         CurrentUser,
+        DifferentUser,
         LocalMachine
     }
 

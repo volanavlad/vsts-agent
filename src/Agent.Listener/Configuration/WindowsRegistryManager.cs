@@ -26,6 +26,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 case RegistryScope.CurrentUser :
                     key = Registry.CurrentUser.OpenSubKey(path, true);                    
                     break;
+                case RegistryScope.DifferentUser :
+                    key = Registry.Users.OpenSubKey(path, true);
+                    break;
                 case RegistryScope.LocalMachine:
                     key = Registry.LocalMachine.OpenSubKey(path, true);                    
                     break;
@@ -35,7 +38,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             {
                 using(key)
                 {
-                    key.DeleteSubKey(subKeyName, false);
+                    key.DeleteValue(subKeyName, false);
                 }
             }
         }

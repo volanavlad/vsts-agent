@@ -93,9 +93,31 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         public void UnConfigure()
         {
             AssertAdminAccess(true);
-            Trace.Info("Reverting the registry settings now.");
-            AutoLogonRegistryManager regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>());
-            regHelper.RevertBackOriginalRegistrySettings();
+            
+            /* We need to find out first if the AutoLogon was configured for the same user
+            If it is different user we should be reverting the AutoLogon user specific registries
+            */
+            var regManager = HostContext.GetService<IWindowsRegistryManager>();
+            var regHelper = new AutoLogonRegistryManager(regManager);
+            regHelper.FetchAutoLogonUserDetails(out string userName, out string domainName);
+            if(string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
+            {
+                throw new InvalidOperationException("AutoLogon is not configured on the machine.");
+            }
+
+            var nativeWindowsHelper = HostContext.GetService<INativeWindowsServiceHelper>();
+            if(nativeWindowsHelper.HasActiveSession(domainName, userName))
+            {
+                Trace.Info($"AutoLogon is enabled for the same user, reverting the registry settings now.");
+                regHelper.RevertOriginalRegistrySettings();
+            }
+            else
+            {
+                Trace.Info($"AutoLogon is enabled for the different user {domainName}\\{userName}, reverting the registry settings now.");
+                var securityIdForTheUser = nativeWindowsHelper.GetSecurityId(domainName, userName);
+                AutoLogonRegistryManager regHelperForDiffUser = new AutoLogonRegistryManager(regManager, securityIdForTheUser);
+                regHelperForDiffUser.RevertOriginalRegistrySettings();
+            }            
         }
 
         public bool IsAutoLogonConfigured()
@@ -168,7 +190,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             var warningReasons = regHelper.GetAutoLogonRelatedWarningsIfAny();
             if(warningReasons.Count > 0)
             {
-                _terminal.WriteLine(StringUtil.Loc("UITestingWarning"));
+                WriteSection(StringUtil.Loc("UITestingWarning"));
                 for(int i=0; i < warningReasons.Count; i++)
                 {
                     _terminal.WriteLine(String.Format("{0} - {1}", (i+1).ToString(), warningReasons[i]));
@@ -248,6 +270,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 domain = segments[0];
                 user = segments[1];
             }
+        }
+
+        private void WriteSection(string message)
+        {
+            _terminal.WriteLine();
+            _terminal.WriteLine($">> {message}:");
+            _terminal.WriteLine();
         }
     }
 }
