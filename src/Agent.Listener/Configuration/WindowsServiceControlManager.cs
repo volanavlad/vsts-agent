@@ -179,7 +179,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             if (!windowsServiceHelper.IsRunningInElevatedMode())
             {
                 Trace.Error("Needs Administrator privileges for unconfigure windows service agent.");
-                        throw new SecurityException(StringUtil.Loc("NeedAdminForUnconfigWinServiceAgent"));
+                throw new SecurityException(StringUtil.Loc("NeedAdminForUnconfigWinServiceAgent"));
             }
 
             string serviceConfigPath = IOUtil.GetServiceConfigFilePath();
