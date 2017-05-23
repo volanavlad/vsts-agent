@@ -1,23 +1,24 @@
 #if OS_WINDOWS
+using Microsoft.VisualStudio.Services.Agent.Util;
+using Microsoft.TeamFoundation.DistributedTask.WebApi;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Principal;
 using System.Threading;
-using Microsoft.VisualStudio.Services.Agent.Util;
-using Microsoft.TeamFoundation.DistributedTask.WebApi;
 
 namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 {
-    [ServiceLocator(Default = typeof(InteractiveSessionConfigurationManager))]
-    public interface IInteractiveSessionConfigurationManager : IAgentService
+    [ServiceLocator(Default = typeof(AutoLogonConfigurationManager))]
+    public interface IAutoLogonConfigurationManager : IAgentService
     {
         void Configure(CommandSettings command);
-        void UnConfigure(int listenerProcessId);
+        void UnConfigure();
         bool RestartNeeded();
-        bool IsInteractiveSessionConfigured();
+        bool IsAutoLogonConfigured();
     }
 
-    public class InteractiveSessionConfigurationManager : AgentService, IInteractiveSessionConfigurationManager
+    public class AutoLogonConfigurationManager : AgentService, IAutoLogonConfigurationManager
     {
         private ITerminal _terminal;
 
@@ -29,6 +30,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public void Configure(CommandSettings command)
         {
+            AssertAdminAccess(false);
+
             var logonAccount = command.GetAutoLogonUserName();
 
             string domainName;
@@ -67,9 +70,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             var securityIdForTheUser = windowsServiceHelper.GetSecurityId(domainName, userName);
             var regManager = HostContext.GetService<IWindowsRegistryManager>();
             
-            InteractiveSessionRegistryManager regHelper = isCurrentUserSameAsAutoLogonUser 
-                                                ? new InteractiveSessionRegistryManager(regManager)
-                                                : new InteractiveSessionRegistryManager(regManager, securityIdForTheUser);
+            AutoLogonRegistryManager regHelper = isCurrentUserSameAsAutoLogonUser 
+                                                ? new AutoLogonRegistryManager(regManager)
+                                                : new AutoLogonRegistryManager(regManager, securityIdForTheUser);
             
             if(!isCurrentUserSameAsAutoLogonUser && !regHelper.ValidateIfRegistryExistsForTheUser(securityIdForTheUser))
             {
@@ -78,7 +81,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
 
             DisplayWarningsIfAny(regHelper);        
-            UpdateRegistriesForInteractiveSession(regHelper, userName, domainName, logonPassword);
+            UpdateRegistriesForAutoLogon(regHelper, userName, domainName, logonPassword);
             ConfigurePowerOptions();
         }
 
@@ -87,50 +90,20 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             return !IsCurrentUserSameAsAutoLogonUser();
         }
 
-        public void UnConfigure(int listenerProcessId)
+        public void UnConfigure()
         {
-            /* When AutoLogon is enabled on the agent, the processes are launched in following manner
-            AgentService.exe (in process mode) hosts (has handle of) Agent.Listener.exe
-            To stop the agent gracefully we need to sent 'Ctrl+C' to Agent.Listener.exe so that it can stop itself (through CtrlCEventHandler)
-            
-            Approach 1- Propogating Ctrl+C from one process to the other
-            If we implement the same CtrlC handler in AgentService.exe and let it know about the exit and then it can route Ctrl+C to Agent.listener.exe.
-            Agent unconfiguration happens through Agent.Listener.exe (called with remove flag), lets call it UnInstaller process
-            So UnInstaller process has to send Ctrl+C to AgentService.exe, to do so UnInstaller has to detach its own console
-            which is not possible as "Config.cmd remove" call is run through the console and user is shown couple of messages.
-            The similar issue occurs when AgentService.exe has to supply the Ctrl+C to Agent.Listener.exe
-
-            Approach 2- Invoke AgentService.exe seperately with a specific argument
-            We can invoke AgentService.exe with a specific argument and then it can send Ctrl+C to Agent.Lister.exe.
-            If Ctrl+C fires up Agent.Listener.exe exits itself with '0' exit code.  AgentService.exe which is hosting the Agent.Listener.exe
-            receives the exit code of the process and then it can stop itself based on the exit code.
-            
-            Given the limitaion of Approach 1, we are taking approach 2.
-             */
-            var agentServicePath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Bin), "agentservice.exe");
-            Trace.Info($"Stopping the agent listener. Process Id - {listenerProcessId}");
-
-            using (var processInvoker = HostContext.CreateService<IProcessInvoker>())
-            {
-                processInvoker.ExecuteAsync(
-                                workingDirectory: string.Empty,
-                                fileName: agentServicePath,
-                                arguments: string.Format("stopagentlistener {0}", listenerProcessId),
-                                environment: null,
-                                cancellationToken: CancellationToken.None);
-            }
-
+            AssertAdminAccess(true);
             Trace.Info("Reverting the registry settings now.");
-            InteractiveSessionRegistryManager regHelper = new InteractiveSessionRegistryManager(HostContext.GetService<IWindowsRegistryManager>());
+            AutoLogonRegistryManager regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>());
             regHelper.RevertBackOriginalRegistrySettings();
         }
 
-        public bool IsInteractiveSessionConfigured()
+        public bool IsAutoLogonConfigured()
         {
             //ToDo: Different user scenario
             
             //find out the path for startup process if it is same as current agent location, yes it was configured
-            var regHelper = new InteractiveSessionRegistryManager(HostContext.GetService<IWindowsRegistryManager>(), null);
+            var regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>(), null);
             var startupCommand = regHelper.GetStartupProcessCommand();
 
             if(string.IsNullOrEmpty(startupCommand))
@@ -142,7 +115,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             return Path.GetDirectoryName(startupCommand).Equals(expectedStartupProcessDir, StringComparison.CurrentCultureIgnoreCase);
         }
 
-        private void UpdateRegistriesForInteractiveSession(InteractiveSessionRegistryManager regHelper, string userName, string domainName, string logonPassword)
+        private void UpdateRegistriesForAutoLogon(AutoLogonRegistryManager regHelper, string userName, string domainName, string logonPassword)
         {
             regHelper.UpdateStandardRegistrySettings();
 
@@ -150,14 +123,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             ConfigureAutoLogon(regHelper, userName, domainName, logonPassword);
 
             //startup process
-            var startupProcessPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Bin), "agent.service.exe");
-            var startupCommand = string.Format($@"{startupProcessPath} runAsProcess");
+            var startupProcessPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Bin), "agent.listener.exe");
+            var startupCommand = string.Format($@"{startupProcessPath} run");
             Trace.Verbose($"Setting startup command as {startupCommand}");
 
             regHelper.SetStartupProcessCommand(startupCommand);
         }
 
-        private void ConfigureAutoLogon(InteractiveSessionRegistryManager regHelper, string userName, string domainName, string logonPassword)
+        private void ConfigureAutoLogon(AutoLogonRegistryManager regHelper, string userName, string domainName, string logonPassword)
         {
             //find out if the autologon was already enabled, show warning in that case
             ShowAutoLogonWarningIfAlreadyEnabled(regHelper, userName);
@@ -168,7 +141,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             regHelper.UpdateAutoLogonSettings(userName, domainName);
         }
 
-        private void ShowAutoLogonWarningIfAlreadyEnabled(InteractiveSessionRegistryManager regHelper, string userName)
+        private void ShowAutoLogonWarningIfAlreadyEnabled(AutoLogonRegistryManager regHelper, string userName)
         {
             regHelper.FetchAutoLogonUserDetails(out string autoLogonUserName, out string domainName);
             if(autoLogonUserName != null && !userName.Equals(autoLogonUserName, StringComparison.CurrentCultureIgnoreCase))
@@ -179,7 +152,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         private bool IsCurrentUserSameAsAutoLogonUser()
         {
-            var regHelper = new InteractiveSessionRegistryManager(HostContext.GetService<IWindowsRegistryManager>());            
+            var regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>());            
             regHelper.FetchAutoLogonUserDetails(out string userName, out string domainName);
             if(string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
             {
@@ -190,9 +163,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             return nativeWindowsHelper.HasActiveSession(domainName, userName);
         }
 
-        private void DisplayWarningsIfAny(InteractiveSessionRegistryManager regHelper)
+        private void DisplayWarningsIfAny(AutoLogonRegistryManager regHelper)
         {
-            var warningReasons = regHelper.GetInteractiveSessionRelatedWarningsIfAny();
+            var warningReasons = regHelper.GetAutoLogonRelatedWarningsIfAny();
             if(warningReasons.Count > 0)
             {
                 _terminal.WriteLine(StringUtil.Loc("UITestingWarning"));
@@ -240,6 +213,26 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     _terminal.WriteLine(StringUtil.Loc("PowerOptionsConfigError"));
                     Trace.Error(ex);
                 }
+            }
+        }
+
+        private void AssertAdminAccess(bool unConfigure = false)
+        {
+            if (new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
+            {
+                return;
+            }
+
+            if(unConfigure)
+            {
+                Trace.Error("Needs Administrator privileges to unconfigure an agent running with AutoLogon capability.");          
+                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonRemoval"));                
+            }
+            else
+            {
+                Trace.Error("Needs Administrator privileges to configure agent with AutoLogon capability.");
+                Trace.Error("You will need to unconfigure the agent and then re-configure with Administrative rights");            
+                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonCapability"));
             }
         }
 

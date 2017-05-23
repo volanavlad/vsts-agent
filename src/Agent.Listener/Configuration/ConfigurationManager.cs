@@ -41,6 +41,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             _term = hostContext.GetService<ITerminal>();
         }
 
+        //TODO: We shall remove this API and promote the usage of store API directly.
         public bool IsServiceConfigured()
         {
             bool result = _store.IsServiceConfigured();
@@ -341,11 +342,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 serviceControlManager.ConfigureService(agentSettings, command);
             }
             //This will be enabled with AutoLogon code changes are tested
-            // else
-            // {
-            //     Trace.Info("Agent is going to run as process so 'InteractiveSession' capability will be set for the agent.");
-            //     ConfigureAutoLogonIfNeeded(command);
-            // }
+            else
+            {
+                
+                ConfigureAutoLogonIfNeeded(command);
+            }
 
 #elif OS_LINUX || OS_OSX
             // generate service config script for OSX and Linux, GenerateScripts() will no-opt on windows.
@@ -359,6 +360,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             string currentAction = StringUtil.Loc("UninstallingService");
             try
             {
+                bool isConfigured = _store.IsConfigured();
+                bool hasCredentials = _store.HasCredentials();
+
                 //stop, uninstall service and remove service config file
                 _term.WriteLine(currentAction);
                 if (_store.IsServiceConfigured())
@@ -381,16 +385,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     throw new Exception(StringUtil.Loc("UnconfigureOSXService"));
 #endif
                 }
-
-                bool isConfigured = _store.IsConfigured();
-                bool hasCredentials = _store.HasCredentials();
-
 #if OS_WINDOWS
-                //This will be enabled with AutoLogon code changes are tested
-                // if(isConfigured && !_store.IsServiceConfigured())
-                // {
-                //     UnConfigureAutoLogonIfNeeded();
-                // }
+                else
+                {
+                    //running as process, unconfigure autologon if it was configured
+                    UnConfigureAutoLogonIfNeeded();
+                }
 #endif
                 //delete agent from the server
                 currentAction = StringUtil.Loc("UnregisteringAgent");
@@ -475,20 +475,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         {
             Trace.Info(nameof(ConfigureAutoLogonIfNeeded));
 
-            bool enableAutoLogon = command.GetEnableAutoLogon();
-            if(!enableAutoLogon)
+            if(!command.GetEnableAutoLogon())
             {
                 return;
             }
 
+            Trace.Info("Agent is going to run as process setting up the 'AutoLogon' capability for the agent.");
             try
-            {
-                AssertAdminAccess();
-                
-                var iConfigManager = HostContext.GetService<IInteractiveSessionConfigurationManager>();
-                iConfigManager.Configure(command);
+            {                
+                var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
+                autoLogonConfigManager.Configure(command);
 
-                if(iConfigManager.RestartNeeded())
+                if(autoLogonConfigManager.RestartNeeded())
                 {
                     Trace.Info("AutoLogon is configured for a different user than the current user. Machine needs a restart.");
                     _term.WriteLine(StringUtil.Loc("RestartMessage"));
@@ -500,7 +498,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
                         Trace.Info("Restarting the machine in 5 seconds");
                         _term.WriteLine(StringUtil.Loc("RestartIn5SecMessage"));
-                        string msg = StringUtil.Loc("ShutdownMessage");                        
+                        string msg = StringUtil.Loc("ShutdownMessage");
+                        //we are not using ProcessInvoker here as today it is not designed for 'fire and forget' pattern
+                        //ExecuteAsync API of ProcessInvoker waits for the process to exit
                         Process.Start(shutdownExePath, $"-r -t 5 -c {msg}");
                     }
                     else
@@ -509,19 +509,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     }
                     return;
                 }
-
-                var startupProcessPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Bin), "agentservice.exe");
-                Trace.Info("Launching the agent process.");
-                _term.WriteLine(StringUtil.Loc("AgentLaunch"));
-                
-                var processInfo = new ProcessStartInfo();
-                processInfo.UseShellExecute = false;
-                processInfo.CreateNoWindow = true;
-                processInfo.FileName = startupProcessPath;
-                processInfo.Arguments = "runasprocess";                
-
-                var agentServiceProcess = Process.Start(processInfo);
-                Trace.Verbose($"Started the agentservice process. Id - {agentServiceProcess.Id}");
             }
             catch(Exception ex)
             {
@@ -532,34 +519,17 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         private void UnConfigureAutoLogonIfNeeded()
         {            
-            var iConfigManager = HostContext.GetService<IInteractiveSessionConfigurationManager>();
-            if (!iConfigManager.IsInteractiveSessionConfigured())
+            var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
+            if (!autoLogonConfigManager.IsAutoLogonConfigured())
             {
                 Trace.Verbose("Interactive session was not configured on the agent. Returning.");
                 return;
             }
-            AssertAdminAccess(true);      
-            var listenerProcessId = GetAgentListenerProcessId();                
-            iConfigManager.UnConfigure(listenerProcessId);
+
+            autoLogonConfigManager.UnConfigure();
         }
 #endif
-
-        private int GetAgentListenerProcessId()
-        {
-            Process[] processes = Process.GetProcessesByName("agent.listener");
-            var currentProcessId = Process.GetCurrentProcess().Id;
-            var executionPath = HostContext.GetDirectory(WellKnownDirectory.Bin);
-            foreach (var process in processes)
-            {
-                if (process.Id != currentProcessId 
-                    && Path.GetDirectoryName(process.MainModule.FileName).Equals(executionPath, StringComparison.CurrentCultureIgnoreCase))
-                {
-                    return process.Id;
-                }
-            }
-            return -1;
-        }
-        
+  
         private ICredentialProvider GetCredentialProvider(CommandSettings command, string serverUrl)
         {
             Trace.Info(nameof(GetCredentialProvider));
@@ -576,26 +546,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             var provider = credentialManager.GetCredentialProvider(authType);
             provider.EnsureCredential(HostContext, command, serverUrl);
             return provider;
-        }
-
-        private void AssertAdminAccess(bool unConfigure = false)
-        {
-            if (new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
-            {
-                return;
-            }
-
-            if(unConfigure)
-            {
-                Trace.Error("Needs Administrator privileges to unconfigure an agent running with autologon capability.");          
-                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonRemoval"));                
-            }
-            else
-            {
-                Trace.Error("Needs Administrator privileges for configure agent as interactive process with autologon capability.");
-                Trace.Error("You will need to unconfigure the agent and then re-configure with Administrative rights");            
-                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonCapability"));
-            }
         }
 
         private TaskAgent UpdateExistingAgent(TaskAgent agent, RSAParameters publicKey, Dictionary<string, string> systemCapabilities)

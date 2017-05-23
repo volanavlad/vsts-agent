@@ -7,13 +7,13 @@ using Microsoft.VisualStudio.Services.Agent.Util;
 
 namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 {
-    public class InteractiveSessionRegistryManager
+    public class AutoLogonRegistryManager
     {
         private IWindowsRegistryManager _registryManager;
         private string _userSecurityId;
         List<KeyValuePair<WellKnownRegistries, string>> _standardRegistries;
 
-        public InteractiveSessionRegistryManager(IWindowsRegistryManager regManager, string sid = null)
+        public AutoLogonRegistryManager(IWindowsRegistryManager regManager, string sid = null)
         {
             _registryManager = regManager;
             _userSecurityId = sid;
@@ -100,7 +100,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             return GetRegistryKeyValue(WellKnownRegistries.StartupProcess);
         }
 
-        public List<string> GetInteractiveSessionRelatedWarningsIfAny()
+        public List<string> GetAutoLogonRelatedWarningsIfAny()
         {
             var warningReasons = new List<string>();
 

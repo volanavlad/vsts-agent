@@ -29,13 +29,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public async void TestAutoLogonConfiguration()
+        public void TestAutoLogonConfiguration()
         {
             using (var hc = new TestHostContext(this))
             {
                 SetupTestEnv(hc);
 
-                var iConfigManager = new InteractiveSessionConfigurationManager();
+                var iConfigManager = new AutoLogonConfigurationManager();
                 iConfigManager.Initialize(hc);
                 iConfigManager.Configure(_command);
 
@@ -49,7 +49,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public async void TestAutoLogonConfigurationForDifferentUser()
+        public void TestAutoLogonConfigurationForDifferentUser()
         {
             using (var hc = new TestHostContext(this))
             {
@@ -58,7 +58,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                 //override behavior
                 _windowsServiceHelper.Setup(x => x.HasActiveSession(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
 
-                var iConfigManager = new InteractiveSessionConfigurationManager();
+                var iConfigManager = new AutoLogonConfigurationManager();
                 iConfigManager.Initialize(hc);
                 iConfigManager.Configure(_command);
                 
@@ -72,8 +72,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public async void TestInteractiveSessionUnConfigure()
-        {            
+        public void TestInteractiveSessionUnConfigure()
+        {
             //strategy-
             //1. fill some existing values in the registry
             //2. run configure
@@ -87,14 +87,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 
                 SetupRegistrySettings(hc);
 
-                var iConfigManager = new InteractiveSessionConfigurationManager();
+                var iConfigManager = new AutoLogonConfigurationManager();
                 iConfigManager.Initialize(hc);
                 iConfigManager.Configure(_command);
 
                 //make sure the backup was taken for the keys
                 RegistryVerificationForUnConfigure(hc, checkBackupKeys:true);
 
-                iConfigManager.UnConfigure(-1);
+                iConfigManager.UnConfigure();
 
                 //original values were reverted
                 RegistryVerificationForUnConfigure(hc);
