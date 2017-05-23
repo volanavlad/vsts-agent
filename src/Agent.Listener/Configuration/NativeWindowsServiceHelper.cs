@@ -61,6 +61,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         string GetSecurityId(string domainName, string userName);
         
         void SetAutoLogonPassword(string password);
+
+        bool IsRunningInElevatedMode();
     }
 
     public class NativeWindowsServiceHelper : AgentService, INativeWindowsServiceHelper
@@ -813,6 +815,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             {
                 lsaPolicy.SetSecretData(LsaPolicy.DefaultPassword, password);
             }
+        }
+
+        public bool IsRunningInElevatedMode()
+        {
+            return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
         }
 
         // Helper class not to repeat whenever we deal with LSA* api

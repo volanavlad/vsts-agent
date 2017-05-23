@@ -187,6 +187,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             _windowsServiceHelper.Setup(x => x.SetAutoLogonPassword(It.IsAny<string>()));
             _windowsServiceHelper.Setup(x => x.HasActiveSession(It.IsAny<string>(), It.IsAny<string>())).Returns(true);             
             _windowsServiceHelper.Setup(x => x.GetSecurityId(It.IsAny<string>(), It.IsAny<string>())).Returns(_sid);
+            _windowsServiceHelper.Setup(x => x.IsRunningInElevatedMode()).Returns(true);
 
             _processInvoker = new Mock<IProcessInvoker>();
             hc.EnqueueInstance<IProcessInvoker>(_processInvoker.Object);

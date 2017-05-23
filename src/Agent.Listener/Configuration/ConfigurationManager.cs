@@ -331,20 +331,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             bool runAsService = command.GetRunAsService();
             if (runAsService)
             {
-                if (!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
-                {
-                    Trace.Error("Needs Administrator privileges for configure agent as windows service.");
-                    throw new SecurityException(StringUtil.Loc("NeedAdminForConfigAgentWinService"));
-                }
-
                 Trace.Info("Configuring to run the agent as service");
                 var serviceControlManager = HostContext.GetService<IWindowsServiceControlManager>();
                 serviceControlManager.ConfigureService(agentSettings, command);
             }
             //This will be enabled with AutoLogon code changes are tested
             else
-            {
-                
+            {                
                 ConfigureAutoLogonIfNeeded(command);
             }
 

@@ -218,7 +218,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         private void AssertAdminAccess(bool unConfigure = false)
         {
-            if (new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator))
+            var windowsServiceHelper = HostContext.GetService<INativeWindowsServiceHelper>();
+            if (windowsServiceHelper.IsRunningInElevatedMode())
             {
                 return;
             }
