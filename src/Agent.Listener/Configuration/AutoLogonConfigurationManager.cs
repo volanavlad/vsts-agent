@@ -13,7 +13,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     public interface IAutoLogonConfigurationManager : IAgentService
     {
         void Configure(CommandSettings command);
-        void UnConfigure();
+        void Unconfigure();
         bool RestartNeeded();
         bool IsAutoLogonConfigured();
     }
@@ -21,37 +21,42 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     public class AutoLogonConfigurationManager : AgentService, IAutoLogonConfigurationManager
     {
         private ITerminal _terminal;
+        private INativeWindowsServiceHelper _windowsServiceHelper;
 
         public override void Initialize(IHostContext hostContext)
         {
             base.Initialize(hostContext);
             _terminal = hostContext.GetService<ITerminal>();
+            _windowsServiceHelper = hostContext.GetService<INativeWindowsServiceHelper>();
         }
 
         public void Configure(CommandSettings command)
         {
-            AssertAdminAccess(false);
-
-            var logonAccount = command.GetAutoLogonUserName();
+            if(!_windowsServiceHelper.IsRunningInElevatedMode())
+            {
+                Trace.Error("Needs Administrator privileges to configure agent with AutoLogon capability.");
+                Trace.Error("You will need to unconfigure the agent and then re-configure with Administrative rights");            
+                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonCapability"));
+            }
 
             string domainName;
             string userName;
+            string logonAccount;
+            string logonPassword;
 
-            GetAccountSegments(logonAccount, out domainName, out userName);
-
-            if ((string.IsNullOrEmpty(domainName) || domainName.Equals(".", StringComparison.CurrentCultureIgnoreCase)) && !logonAccount.Contains("@"))
-            {
-                logonAccount = String.Format("{0}\\{1}", Environment.MachineName, userName);
-            }
-
-            Trace.Info("LogonAccount after transforming: {0}, user: {1}, domain: {2}", logonAccount, userName, domainName);
-
-            string logonPassword = string.Empty;
-            var windowsServiceHelper = HostContext.GetService<INativeWindowsServiceHelper>();
             while (true)
             {
+                logonAccount = command.GetAutoLogonUserName();
+                GetAccountSegments(logonAccount, out domainName, out userName);
+
+                if ((string.IsNullOrEmpty(domainName) || domainName.Equals(".", StringComparison.CurrentCultureIgnoreCase)) && !logonAccount.Contains("@"))
+                {
+                    logonAccount = String.Format("{0}\\{1}", Environment.MachineName, userName);
+                }
+                Trace.Info("LogonAccount after transforming: {0}, user: {1}, domain: {2}", logonAccount, userName, domainName);
+
                 logonPassword = command.GetWindowsLogonPassword(logonAccount);
-                if (windowsServiceHelper.IsValidCredential(domainName, userName, logonPassword))
+                if (_windowsServiceHelper.IsValidCredential(domainName, userName, logonPassword))
                 {
                     Trace.Info("Credential validation succeeded");
                     break;
@@ -62,22 +67,22 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     throw new SecurityException(StringUtil.Loc("InvalidWindowsCredential"));
                 }
                     
-                Trace.Info("Invalid credential entered");
+                Trace.Error("Invalid credential entered");
                 _terminal.WriteLine(StringUtil.Loc("InvalidWindowsCredential"));
             }
 
-            bool isCurrentUserSameAsAutoLogonUser = windowsServiceHelper.HasActiveSession(domainName, userName);                
-            var securityIdForTheUser = windowsServiceHelper.GetSecurityId(domainName, userName);
+            bool isCurrentUserSameAsAutoLogonUser = _windowsServiceHelper.HasActiveSession(domainName, userName);                
+            var securityIdForTheUser = _windowsServiceHelper.GetSecurityId(domainName, userName);
             var regManager = HostContext.GetService<IWindowsRegistryManager>();
             
             AutoLogonRegistryManager regHelper = isCurrentUserSameAsAutoLogonUser 
                                                 ? new AutoLogonRegistryManager(regManager)
                                                 : new AutoLogonRegistryManager(regManager, securityIdForTheUser);
             
-            if(!isCurrentUserSameAsAutoLogonUser && !regHelper.ValidateIfRegistryExistsForTheUser(securityIdForTheUser))
+            if (!isCurrentUserSameAsAutoLogonUser && !regHelper.DoesRegistryExistForUser(securityIdForTheUser))
             {
-                Trace.Error(String.Format($"The autologon user '{logonAccount}' doesnt have a user profile on the machine. Please login once with the expected autologon user and reconfigure the agent again"));
-                throw new InvalidOperationException("No user profile exists for the AutoLogon user");
+                Trace.Error($"The autologon user '{logonAccount}' doesnt have a user profile on the machine. Please login once with the expected autologon user and reconfigure the agent again");
+                throw new InvalidOperationException(StringUtil.Loc("NoUserProfile", logonAccount));
             }
 
             DisplayWarningsIfAny(regHelper);        
@@ -87,12 +92,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public bool RestartNeeded()
         {
-            return !IsCurrentUserSameAsAutoLogonUser();
+            var regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>());            
+            regHelper.FetchAutoLogonUserDetails(out string userName, out string domainName);
+            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
+            {
+                throw new InvalidOperationException(StringUtil.Loc("AutoLogonNotConfigured"));
+            }
+
+            return !_windowsServiceHelper.HasActiveSession(domainName, userName);
         }
 
-        public void UnConfigure()
+        public void Unconfigure()
         {
-            AssertAdminAccess(true);
+            if(!_windowsServiceHelper.IsRunningInElevatedMode())
+            {
+                Trace.Error("Needs Administrator privileges to unconfigure an agent running with AutoLogon capability.");          
+                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonRemoval"));
+            }
             
             /* We need to find out first if the AutoLogon was configured for the same user
             If it is different user we should be reverting the AutoLogon user specific registries
@@ -100,13 +116,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             var regManager = HostContext.GetService<IWindowsRegistryManager>();
             var regHelper = new AutoLogonRegistryManager(regManager);
             regHelper.FetchAutoLogonUserDetails(out string userName, out string domainName);
-            if(string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
+            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
             {
-                throw new InvalidOperationException("AutoLogon is not configured on the machine.");
+                throw new InvalidOperationException(StringUtil.Loc("AutoLogonNotConfigured"));
             }
 
-            var nativeWindowsHelper = HostContext.GetService<INativeWindowsServiceHelper>();
-            if(nativeWindowsHelper.HasActiveSession(domainName, userName))
+            if (_windowsServiceHelper.HasActiveSession(domainName, userName))
             {
                 Trace.Info($"AutoLogon is enabled for the same user, reverting the registry settings now.");
                 regHelper.RevertOriginalRegistrySettings();
@@ -114,7 +129,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             else
             {
                 Trace.Info($"AutoLogon is enabled for the different user {domainName}\\{userName}, reverting the registry settings now.");
-                var securityIdForTheUser = nativeWindowsHelper.GetSecurityId(domainName, userName);
+                var securityIdForTheUser = _windowsServiceHelper.GetSecurityId(domainName, userName);
                 AutoLogonRegistryManager regHelperForDiffUser = new AutoLogonRegistryManager(regManager, securityIdForTheUser);
                 regHelperForDiffUser.RevertOriginalRegistrySettings();
             }            
@@ -128,7 +143,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             var regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>(), null);
             var startupCommand = regHelper.GetStartupProcessCommand();
 
-            if(string.IsNullOrEmpty(startupCommand))
+            if (string.IsNullOrEmpty(startupCommand))
             {
                 return false;
             }
@@ -146,8 +161,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
             //startup process
             var startupProcessPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Bin), "agent.listener.exe");
-            var startupCommand = string.Format($@"{startupProcessPath} run");
-            Trace.Verbose($"Setting startup command as {startupCommand}");
+            var startupCommand = $@"{startupProcessPath} run";
+            Trace.Info($"Setting startup command as {startupCommand}");
 
             regHelper.SetStartupProcessCommand(startupCommand);
         }
@@ -156,52 +171,38 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         {
             //find out if the autologon was already enabled, show warning in that case
             ShowAutoLogonWarningIfAlreadyEnabled(regHelper, userName);
-
-            var windowsHelper = HostContext.GetService<INativeWindowsServiceHelper>();
-            windowsHelper.SetAutoLogonPassword(logonPassword);
-
+            _windowsServiceHelper.SetAutoLogonPassword(logonPassword);
             regHelper.UpdateAutoLogonSettings(userName, domainName);
         }
 
         private void ShowAutoLogonWarningIfAlreadyEnabled(AutoLogonRegistryManager regHelper, string userName)
         {
             regHelper.FetchAutoLogonUserDetails(out string autoLogonUserName, out string domainName);
-            if(autoLogonUserName != null && !userName.Equals(autoLogonUserName, StringComparison.CurrentCultureIgnoreCase))
+            if (autoLogonUserName != null && !userName.Equals(autoLogonUserName, StringComparison.CurrentCultureIgnoreCase))
             {
-                _terminal.WriteLine(string.Format(StringUtil.Loc("AutoLogonAlreadyEnabledWarning"), userName));
+                _terminal.WriteLine(StringUtil.Loc("AutoLogonAlreadyEnabledWarning", userName));
             }
-        }
-
-        private bool IsCurrentUserSameAsAutoLogonUser()
-        {
-            var regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>());            
-            regHelper.FetchAutoLogonUserDetails(out string userName, out string domainName);
-            if(string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
-            {
-                throw new InvalidOperationException("AutoLogon is not configured on the machine.");
-            }
-
-            var nativeWindowsHelper = HostContext.GetService<INativeWindowsServiceHelper>();
-            return nativeWindowsHelper.HasActiveSession(domainName, userName);
         }
 
         private void DisplayWarningsIfAny(AutoLogonRegistryManager regHelper)
         {
             var warningReasons = regHelper.GetAutoLogonRelatedWarningsIfAny();
-            if(warningReasons.Count > 0)
+            if (warningReasons.Count > 0)
             {
-                WriteSection(StringUtil.Loc("UITestingWarning"));
-                for(int i=0; i < warningReasons.Count; i++)
+                _terminal.WriteLine();
+                _terminal.WriteLine(StringUtil.Loc("UITestingWarning"));
+                for (int i=0; i < warningReasons.Count; i++)
                 {
-                    _terminal.WriteLine(String.Format("{0} - {1}", (i+1).ToString(), warningReasons[i]));
+                    _terminal.WriteLine(String.Format("{0} - {1}", i + 1, warningReasons[i]));
                 }
+                _terminal.WriteLine();
             }
         }
 
         private void ConfigurePowerOptions()
         {
             var whichUtil = HostContext.GetService<IWhichUtil>();
-            var filePath = whichUtil.Which("powercfg.exe");
+            var filePath = whichUtil.Which("powercfg.exe", require:true);
             string[] commands = new string[] {"/Change monitor-timeout-ac 0", "/Change monitor-timeout-dc 0"};
 
             foreach (var command in commands)
@@ -213,7 +214,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     {
                         processInvoker.OutputDataReceived += delegate (object sender, ProcessDataReceivedEventArgs message)
                         {
-                            Trace.Verbose(message.Data);
+                            Trace.Info(message.Data);
                         };
 
                         processInvoker.ErrorDataReceived += delegate (object sender, ProcessDataReceivedEventArgs message)
@@ -232,30 +233,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 catch(Exception ex)
                 {
                     //we will not stop the configuration. just show the warning and continue
-                    _terminal.WriteLine(StringUtil.Loc("PowerOptionsConfigError"));
+                    _terminal.WriteError(StringUtil.Loc("PowerOptionsConfigError"));
                     Trace.Error(ex);
                 }
-            }
-        }
-
-        private void AssertAdminAccess(bool unConfigure = false)
-        {
-            var windowsServiceHelper = HostContext.GetService<INativeWindowsServiceHelper>();
-            if (windowsServiceHelper.IsRunningInElevatedMode())
-            {
-                return;
-            }
-
-            if(unConfigure)
-            {
-                Trace.Error("Needs Administrator privileges to unconfigure an agent running with AutoLogon capability.");          
-                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonRemoval"));                
-            }
-            else
-            {
-                Trace.Error("Needs Administrator privileges to configure agent with AutoLogon capability.");
-                Trace.Error("You will need to unconfigure the agent and then re-configure with Administrative rights");            
-                throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonCapability"));
             }
         }
 
@@ -270,13 +250,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 domain = segments[0];
                 user = segments[1];
             }
-        }
-
-        private void WriteSection(string message)
-        {
-            _terminal.WriteLine();
-            _terminal.WriteLine($">> {message}:");
-            _terminal.WriteLine();
         }
     }
 }

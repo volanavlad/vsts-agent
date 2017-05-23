@@ -94,7 +94,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                 //make sure the backup was taken for the keys
                 RegistryVerificationForUnConfigure(hc, checkBackupKeys:true);
 
-                iConfigManager.UnConfigure();
+                iConfigManager.Unconfigure();
 
                 //original values were reverted
                 RegistryVerificationForUnConfigure(hc);
@@ -129,7 +129,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                 //make sure the backup was taken for the keys
                 RegistryVerificationForUnConfigure(hc, sid:_sid, checkBackupKeys:true);
 
-                iConfigManager.UnConfigure();
+                iConfigManager.Unconfigure();
 
                 //original values were reverted
                 RegistryVerificationForUnConfigure(hc, sid:_sid);
@@ -327,7 +327,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         private string GetRegistryKeyPath(WellKnownRegistries targetRegistryKey, string userSid = null)
         {
             var userHivePath = GetUserRegistryRootPath(userSid);
-            switch(targetRegistryKey)
+            switch (targetRegistryKey)
             {
                 //user specific registry settings
                 case WellKnownRegistries.ScreenSaver :
@@ -372,7 +372,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         public void DeleteKey(RegistryScope scope, string path, string keyName)
         {            
             var completePath = path;
-            switch(scope)
+            switch (scope)
             {
                 case RegistryScope.CurrentUser :
                     completePath = string.Format($@"{RegistryConstants.CurrentUserRootPath}\{path}");

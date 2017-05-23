@@ -11,7 +11,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     {
         private IWindowsRegistryManager _registryManager;
         private string _userSecurityId;
-        List<KeyValuePair<WellKnownRegistries, string>> _standardRegistries;
+        private List<KeyValuePair<WellKnownRegistries, string>> _standardRegistries;
 
         public AutoLogonRegistryManager(IWindowsRegistryManager regManager, string sid = null)
         {
@@ -33,14 +33,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             };
         }
 
-        public bool ValidateIfRegistryExistsForTheUser(string sid)
+        public bool DoesRegistryExistForUser(string sid)
         {
             return _registryManager.RegsitryExists(sid);
         }
 
         public void UpdateStandardRegistrySettings()
         {
-            foreach(var regSetting in _standardRegistries)
+            foreach (var regSetting in _standardRegistries)
             {
                 SetRegistryKeyValue(regSetting.Key, regSetting.Value);
             }
@@ -48,7 +48,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public void RevertOriginalRegistrySettings()
         {
-            foreach(var regSetting in _standardRegistries)
+            foreach (var regSetting in _standardRegistries)
             {
                 RevertOriginalRegistry(regSetting.Key);
             }
@@ -80,16 +80,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             SetRegistryKeyValue(WellKnownRegistries.AutoLogon, "1");
         }
 
-        public string GetAutoLogonUserName()
-        {
-            var regValue = GetRegistryKeyValue(WellKnownRegistries.AutoLogon);
-            int.TryParse(regValue, out int autoLogonEnabled);
-
-            return autoLogonEnabled == 1
-                    ? GetRegistryKeyValue(WellKnownRegistries.AutoLogonUserName)
-                    : null;
-        }
-
         public void SetStartupProcessCommand(string startupCommand)
         {            
             SetRegistryKeyValue(WellKnownRegistries.StartupProcess, startupCommand);
@@ -106,16 +96,17 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
             //screen saver
             var screenSaverValue = GetRegistryKeyValue(WellKnownRegistries.ScreenSaverDomainPolicy);
-            int.TryParse(screenSaverValue, out int isScreenSaverDomainPolicySet);
-            if (isScreenSaverDomainPolicySet == 1)
+            if (int.TryParse(screenSaverValue, out int isScreenSaverDomainPolicySet)
+                    && isScreenSaverDomainPolicySet == 1)
             {
                 warningReasons.Add(StringUtil.Loc("UITestingWarning_ScreenSaver"));
             }
 
             //shutdown reason
             var shutdownReasonValue = GetRegistryKeyValue(WellKnownRegistries.ShutdownReason);
-            int.TryParse(shutdownReasonValue, out int shutdownReasonOn);
-            if (shutdownReasonOn == 1)
+            ;
+            if (int.TryParse(shutdownReasonValue, out int shutdownReasonOn) 
+                    && shutdownReasonOn == 1)
             {
                 warningReasons.Add(StringUtil.Loc("UITestingWarning_ShutdownReason"));
             }
@@ -144,8 +135,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             domainName = null;
 
             var regValue = GetRegistryKeyValue(WellKnownRegistries.AutoLogon);
-            int.TryParse(regValue, out int autoLogonEnabled);
-            if (autoLogonEnabled == 1)
+            if (int.TryParse(regValue, out int autoLogonEnabled)
+                    && autoLogonEnabled == 1)
             {
                 userName = GetRegistryKeyValue(WellKnownRegistries.AutoLogonUserName);
                 domainName = GetRegistryKeyValue(WellKnownRegistries.AutoLogonDomainName);
@@ -219,7 +210,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     _registryManager.DeleteKey(RegistryScope.LocalMachine, RegistryConstants.RegPaths.LegalNotice, regKeyName);
                     break;
                 default:
-                   throw new InvalidOperationException("Invalid registry key to delete");
+                   throw new InvalidOperationException(StringUtil.Loc("InvalidRegKey"));
             }
         }
 
@@ -359,13 +350,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             public const string StartupProcess = "VSTSAgent";
             public const string ShutdownReason = "ShutdownReasonOn";
             public const string ShutdownReasonUI = "ShutdownReasonUI";
-            public const string LegalNoticeCaption = "legalnoticecaption";
-            public const string LegalNoticeText = "legalnoticetext";
+            public const string LegalNoticeCaption = "LegalNoticeCaption";
+            public const string LegalNoticeText = "LegalNoticeText";
         }
 
         public static string GetActualKeyNameForWellKnownRegistry(WellKnownRegistries registry)
         {
-            switch(registry)
+            switch (registry)
             {
                 case WellKnownRegistries.ScreenSaverDomainPolicy:
                 case WellKnownRegistries.ScreenSaver:

@@ -353,9 +353,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             string currentAction = StringUtil.Loc("UninstallingService");
             try
             {
-                bool isConfigured = _store.IsConfigured();
-                bool hasCredentials = _store.HasCredentials();
-
                 //stop, uninstall service and remove service config file
                 _term.WriteLine(currentAction);
                 if (_store.IsServiceConfigured())
@@ -372,16 +369,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     throw new Exception(StringUtil.Loc("UnconfigureOSXService"));
 #endif
                 }
-#if OS_WINDOWS
                 else
                 {
+#if OS_WINDOWS
                     //running as process, unconfigure autologon if it was configured
-                    UnConfigureAutoLogonIfNeeded();
-                }
+                    var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
+                    if (!autoLogonConfigManager.IsAutoLogonConfigured())
+                    {
+                        Trace.Info("AutoLogon was not configured on the agent.");
+                    }
+                    autoLogonConfigManager.Unconfigure();
 #endif
+                }
                 //delete agent from the server
                 currentAction = StringUtil.Loc("UnregisteringAgent");
-                _term.WriteLine(currentAction);                
+                _term.WriteLine(currentAction);
+                bool isConfigured = _store.IsConfigured();
+                bool hasCredentials = _store.HasCredentials();
                 if (isConfigured && hasCredentials)
                 {
                     AgentSettings settings = _store.GetSettings();
@@ -460,9 +464,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 #if OS_WINDOWS
         private void ConfigureAutoLogonIfNeeded(CommandSettings command)
         {
-            Trace.Info(nameof(ConfigureAutoLogonIfNeeded));
+            Trace.Entering();
 
-            if(!command.GetEnableAutoLogon())
+            if (!command.GetEnableAutoLogon())
             {
                 return;
             }
@@ -473,12 +477,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
                 autoLogonConfigManager.Configure(command);
 
-                if(autoLogonConfigManager.RestartNeeded())
+                if (autoLogonConfigManager.RestartNeeded())
                 {
                     Trace.Info("AutoLogon is configured for a different user than the current user. Machine needs a restart.");
                     _term.WriteLine(StringUtil.Loc("RestartMessage"));
                     var shallRestart = command.GetRestartNow();
-                    if(shallRestart)
+                    if (shallRestart)
                     {
                         var whichUtil = HostContext.GetService<IWhichUtil>();
                         var shutdownExePath = whichUtil.Which("shutdown.exe");
@@ -494,7 +498,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     {
                         Trace.Info("No restart happened. As the interactive session is configured for a different user agent will not be launched");
                     }
-                    return;
                 }
             }
             catch(Exception ex)
@@ -502,18 +505,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 Trace.Error(ex);
                 _term.WriteLine(StringUtil.Loc("AutoLogonConfigurationFailureMessage"));
             }
-        }
-
-        private void UnConfigureAutoLogonIfNeeded()
-        {            
-            var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
-            if (!autoLogonConfigManager.IsAutoLogonConfigured())
-            {
-                Trace.Verbose("Interactive session was not configured on the agent. Returning.");
-                return;
-            }
-
-            autoLogonConfigManager.UnConfigure();
         }
 #endif
   

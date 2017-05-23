@@ -21,7 +21,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         public void DeleteKey(RegistryScope scope, string path, string subKeyName)
         {
             RegistryKey key = null;
-            switch(scope)
+            switch (scope)
             {
                 case RegistryScope.CurrentUser :
                     key = Registry.CurrentUser.OpenSubKey(path, true);                    
@@ -34,7 +34,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     break;
             }
 
-            if(key != null)
+            if (key != null)
             {
                 using(key)
                 {
