@@ -1,11 +1,11 @@
 using Microsoft.VisualStudio.Services.Agent.Listener.Capabilities;
+using Microsoft.VisualStudio.Services.Agent.Listener.Configuration;
+using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Xunit;
-using Moq;
-using Microsoft.VisualStudio.Services.Agent.Listener.Configuration;
 
 namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 {

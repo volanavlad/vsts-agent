@@ -1,10 +1,10 @@
+using Microsoft.VisualStudio.Services.Agent.Listener.Configuration;
+using Microsoft.VisualStudio.Services.Agent.Util;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.Services.Agent.Listener.Configuration;
-using Microsoft.VisualStudio.Services.Agent.Util;
-using Microsoft.Win32;
 
 namespace Microsoft.VisualStudio.Services.Agent.Listener.Capabilities
 {
