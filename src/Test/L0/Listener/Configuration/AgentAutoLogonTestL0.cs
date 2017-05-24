@@ -131,7 +131,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 
                 //make sure the backup was taken for the keys
                 RegistryVerificationForUnConfigure(hc, sid:_sid, checkBackupKeys:true);
-
                 iConfigManager.Unconfigure();
 
                 //original values were reverted
@@ -283,6 +282,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             _store.Setup(x => x.IsAutoLogonConfigured()).Returns(() => _autoLogonSettings != null);
             _store.Setup(x => x.GetAutoLogonSettings()).Returns(() => _autoLogonSettings);
             hc.SetSingleton<IConfigurationStore>(_store.Object);
+
+            hc.SetSingleton<IAutoLogonRegistryManager>(new AutoLogonRegistryManager());
         }
 
         private int SetPowerCfgFlags(bool isForACOption)

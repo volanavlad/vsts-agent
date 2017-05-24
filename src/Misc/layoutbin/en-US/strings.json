@@ -31,7 +31,6 @@
   "AutoLogonAccountNameDescription": "User account to use for autologon",
   "AutoLogonAlreadyEnabledWarning": "WARNING: Autologon is already enabled for the user '{0}'. This setting will be overwritten now.",
   "AutoLogonConfigurationFailureMessage": "AutoLogon configuration failed on the machine. Refer logs for more details. Invoke run.cmd to run agent without AutoLogon.",
-  "AutoLogonNotConfigured": "AutoLogon is not configured on the machine.",
   "BuildCommandNotFound": "##vso[build.{0}] is not a recognized command for Build command extension. Please reference documentaion (http://go.microsoft.com/fwlink/?LinkId=817296)",
   "BuildDirLastUseTIme": "The last time build directory '{0}' been used is: {1}",
   "BuildNumberRequired": "Build number is required.",

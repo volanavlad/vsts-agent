@@ -23,14 +23,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     {
         private ITerminal _terminal;
         private INativeWindowsServiceHelper _windowsServiceHelper;
+        private IAutoLogonRegistryManager _autoLogonRegManager;
         private IConfigurationStore _store;
+        private string _userSecurityId;
 
         public override void Initialize(IHostContext hostContext)
         {
             base.Initialize(hostContext);
             _terminal = hostContext.GetService<ITerminal>();
             _windowsServiceHelper = hostContext.GetService<INativeWindowsServiceHelper>();
+            _autoLogonRegManager = HostContext.GetService<IAutoLogonRegistryManager>();
             _store = hostContext.GetService<IConfigurationStore>();
+            _userSecurityId = null;
         }
 
         public void Configure(CommandSettings command)
@@ -74,22 +78,19 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 _terminal.WriteLine(StringUtil.Loc("InvalidWindowsCredential"));
             }
 
-            bool isCurrentUserSameAsAutoLogonUser = _windowsServiceHelper.HasActiveSession(domainName, userName);                
-            var securityIdForTheUser = _windowsServiceHelper.GetSecurityId(domainName, userName);
-            var regManager = HostContext.GetService<IWindowsRegistryManager>();
-            
-            AutoLogonRegistryManager regHelper = isCurrentUserSameAsAutoLogonUser 
-                                                ? new AutoLogonRegistryManager(regManager)
-                                                : new AutoLogonRegistryManager(regManager, securityIdForTheUser);
-            
-            if (!isCurrentUserSameAsAutoLogonUser && !regHelper.DoesRegistryExistForUser(securityIdForTheUser))
+            bool isCurrentUserSameAsAutoLogonUser = _windowsServiceHelper.HasActiveSession(domainName, userName);            
+            if(!isCurrentUserSameAsAutoLogonUser)
             {
-                Trace.Error($"The autologon user '{logonAccount}' doesnt have a user profile on the machine. Please login once with the expected autologon user and reconfigure the agent again");
-                throw new InvalidOperationException(StringUtil.Loc("NoUserProfile", logonAccount));
+                _userSecurityId = _windowsServiceHelper.GetSecurityId(domainName, userName);
+                if (!_autoLogonRegManager.DoesRegistryExistForUser(_userSecurityId))
+                {
+                    Trace.Error($"The autologon user '{logonAccount}' doesnt have a user profile on the machine. Please login once with the expected autologon user and reconfigure the agent again");
+                    throw new InvalidOperationException(StringUtil.Loc("NoUserProfile", logonAccount));
+                }
             }
 
-            DisplayWarningsIfAny(regHelper);        
-            UpdateRegistriesForAutoLogon(regHelper, userName, domainName, logonPassword);            
+            DisplayWarningsIfAny();        
+            UpdateRegistriesForAutoLogon(userName, domainName, logonPassword);            
             ConfigurePowerOptions();
             SaveAutoLogonSettings(domainName, userName);
         }
@@ -115,27 +116,19 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             
             /* We need to find out first if the AutoLogon was configured for the same user
             If it is different user we should be reverting the AutoLogon user specific registries
-            */
-            var regManager = HostContext.GetService<IWindowsRegistryManager>();
-            var regHelper = new AutoLogonRegistryManager(regManager);
-            regHelper.FetchAutoLogonUserDetails(out string userName, out string domainName);
-            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
+            */            
+            var autoLogonSettings = _store.GetAutoLogonSettings();
+            if (!_windowsServiceHelper.HasActiveSession(autoLogonSettings.UserDomainName, autoLogonSettings.UserName))
             {
-                throw new InvalidOperationException(StringUtil.Loc("AutoLogonNotConfigured"));
-            }
-
-            if (_windowsServiceHelper.HasActiveSession(domainName, userName))
-            {
-                Trace.Info($"AutoLogon is enabled for the same user, reverting the registry settings now.");
-                regHelper.RevertOriginalRegistrySettings();
+                _userSecurityId = _windowsServiceHelper.GetSecurityId(autoLogonSettings.UserDomainName, autoLogonSettings.UserName);
+                Trace.Info($"AutoLogon is enabled for the different user {autoLogonSettings.UserDomainName}\\{autoLogonSettings.UserName}, reverting the registry settings now.");
             }
             else
             {
-                Trace.Info($"AutoLogon is enabled for the different user {domainName}\\{userName}, reverting the registry settings now.");
-                var securityIdForTheUser = _windowsServiceHelper.GetSecurityId(domainName, userName);
-                AutoLogonRegistryManager regHelperForDiffUser = new AutoLogonRegistryManager(regManager, securityIdForTheUser);
-                regHelperForDiffUser.RevertOriginalRegistrySettings();
+                Trace.Info($"AutoLogon is enabled for the same user, reverting the registry settings now.");
             }
+
+            _autoLogonRegManager.RevertOriginalRegistrySettings(_userSecurityId);           
 
             Trace.Info("Deleting the autologon settings now.");
             _store.DeleteAutoLogonSettings();
@@ -154,41 +147,53 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             Trace.Info("Saved the autologon settings");
         }
 
-        private void UpdateRegistriesForAutoLogon(AutoLogonRegistryManager regHelper, string userName, string domainName, string logonPassword)
+        private void UpdateRegistriesForAutoLogon(string userName, string domainName, string logonPassword)
         {
-            regHelper.UpdateStandardRegistrySettings();
+            _autoLogonRegManager.UpdateStandardRegistrySettings(_userSecurityId);
 
-            //auto logon
-            ConfigureAutoLogon(regHelper, userName, domainName, logonPassword);
+            //autologon
+            ConfigureAutoLogon(userName, domainName, logonPassword);
 
-            //startup process
-            var startupProcessPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Bin), "agent.listener.exe");
-            var startupCommand = $@"{startupProcessPath} run";
-            Trace.Info($"Setting startup command as {startupCommand}");
+            //startup process            
+            string cmdExePath = System.Environment.GetEnvironmentVariable("comspec");
+            if (string.IsNullOrEmpty(cmdExePath))
+            {
+                cmdExePath = "cmd.exe";
+            }
+            //file to run in cmd.exe
+            var filePath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "run.cmd");
+            //extra "" are to handle the spaces in the file path (if any)
+            var startupCommand = $@"start ""Agent with AutoLogon"" {cmdExePath} /D /S /C """"{filePath}""""";
+            Trace.Info($"Setting startup command as '{startupCommand}'");
 
-            regHelper.SetStartupProcessCommand(startupCommand);
+            _autoLogonRegManager.SetStartupProcessCommand(_userSecurityId, startupCommand);
         }
 
-        private void ConfigureAutoLogon(AutoLogonRegistryManager regHelper, string userName, string domainName, string logonPassword)
+        private void ConfigureAutoLogon(string userName, string domainName, string logonPassword)
         {
             //find out if the autologon was already enabled, show warning in that case
-            ShowAutoLogonWarningIfAlreadyEnabled(regHelper, userName);
+            ShowAutoLogonWarningIfAlreadyEnabled(userName, domainName);
             _windowsServiceHelper.SetAutoLogonPassword(logonPassword);
-            regHelper.UpdateAutoLogonSettings(userName, domainName);
+            _autoLogonRegManager.UpdateAutoLogonSettings(userName, domainName);
         }
 
-        private void ShowAutoLogonWarningIfAlreadyEnabled(AutoLogonRegistryManager regHelper, string userName)
+        private void ShowAutoLogonWarningIfAlreadyEnabled(string userName, string domainName)
         {
-            regHelper.FetchAutoLogonUserDetails(out string autoLogonUserName, out string domainName);
-            if (autoLogonUserName != null && !userName.Equals(autoLogonUserName, StringComparison.CurrentCultureIgnoreCase))
+            //we cant use store here as store is specific to the agent root and if there is some other on the agent, we dont have access to it
+            //we need to rely on the registry only
+            _autoLogonRegManager.FetchAutoLogonUserDetails(out string autoLogonUserName, out string autoLogonUserDomainName);
+            if (autoLogonUserName != null
+                    && autoLogonUserDomainName != null
+                    && !domainName.Equals(autoLogonUserDomainName, StringComparison.CurrentCultureIgnoreCase)
+                    && !userName.Equals(autoLogonUserName, StringComparison.CurrentCultureIgnoreCase))
             {
                 _terminal.WriteLine(StringUtil.Loc("AutoLogonAlreadyEnabledWarning", userName));
             }
         }
 
-        private void DisplayWarningsIfAny(AutoLogonRegistryManager regHelper)
+        private void DisplayWarningsIfAny()
         {
-            var warningReasons = regHelper.GetAutoLogonRelatedWarningsIfAny();
+            var warningReasons = _autoLogonRegManager.GetAutoLogonRelatedWarningsIfAny(_userSecurityId);
             if (warningReasons.Count > 0)
             {
                 _terminal.WriteLine();
