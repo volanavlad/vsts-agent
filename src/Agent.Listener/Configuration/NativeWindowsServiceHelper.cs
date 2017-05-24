@@ -902,13 +902,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         internal static class EnumerateUsers
         {
             [DllImport("wtsapi32.dll")]
-            static extern IntPtr WTSOpenServer([MarshalAs(UnmanagedType.LPStr)] String pServerName);
+            private static extern IntPtr WTSOpenServer([MarshalAs(UnmanagedType.LPStr)] String pServerName);
 
             [DllImport("wtsapi32.dll")]
-            static extern void WTSCloseServer(IntPtr hServer);
+            private static extern void WTSCloseServer(IntPtr hServer);
 
             [DllImport("wtsapi32.dll")]
-            static extern Int32 WTSEnumerateSessions(
+            private static extern Int32 WTSEnumerateSessions(
                 IntPtr hServer,
                 [MarshalAs(UnmanagedType.U4)] Int32 Reserved,
                 [MarshalAs(UnmanagedType.U4)] Int32 Version,
@@ -916,10 +916,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 [MarshalAs(UnmanagedType.U4)] ref Int32 pCount);
 
             [DllImport("wtsapi32.dll")]
-            static extern void WTSFreeMemory(IntPtr pMemory);
+            private static extern void WTSFreeMemory(IntPtr pMemory);
 
             [DllImport("Wtsapi32.dll")]
-            static extern bool WTSQuerySessionInformation(
+            private static extern bool WTSQuerySessionInformation(
                 System.IntPtr hServer, int sessionId, WTS_INFO_CLASS wtsInfoClass, out System.IntPtr ppBuffer, out uint pBytesReturned);
 
             [StructLayout(LayoutKind.Sequential)]
@@ -1086,9 +1086,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         public static extern uint LsaNtStatusToWinError(
             uint status
         );
-
-        // [DllImport("userenv.dll", SetLastError = true, CharSet = CharSet.Auto)]
-        // public static extern bool LoadUserProfile(IntPtr hToken, ref PROFILEINFO lpProfileInfo);            
 
         // Declaration of external pinvoke functions
         private static readonly string s_logonAsServiceName = "SeServiceLogonRight";

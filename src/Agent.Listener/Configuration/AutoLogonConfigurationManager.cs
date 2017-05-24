@@ -1,4 +1,5 @@
 #if OS_WINDOWS
+using Microsoft.VisualStudio.Services.Agent;
 using Microsoft.VisualStudio.Services.Agent.Util;
 using Microsoft.TeamFoundation.DistributedTask.WebApi;
 using System;
@@ -6,6 +7,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Principal;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 {
@@ -15,24 +17,25 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         void Configure(CommandSettings command);
         void Unconfigure();
         bool RestartNeeded();
-        bool IsAutoLogonConfigured();
     }
 
     public class AutoLogonConfigurationManager : AgentService, IAutoLogonConfigurationManager
     {
         private ITerminal _terminal;
         private INativeWindowsServiceHelper _windowsServiceHelper;
+        private IConfigurationStore _store;
 
         public override void Initialize(IHostContext hostContext)
         {
             base.Initialize(hostContext);
             _terminal = hostContext.GetService<ITerminal>();
             _windowsServiceHelper = hostContext.GetService<INativeWindowsServiceHelper>();
+            _store = hostContext.GetService<IConfigurationStore>();
         }
 
         public void Configure(CommandSettings command)
         {
-            if(!_windowsServiceHelper.IsRunningInElevatedMode())
+            if (!_windowsServiceHelper.IsRunningInElevatedMode())
             {
                 Trace.Error("Needs Administrator privileges to configure agent with AutoLogon capability.");
                 Trace.Error("You will need to unconfigure the agent and then re-configure with Administrative rights");            
@@ -45,8 +48,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             string logonPassword;
 
             while (true)
-            {
-                logonAccount = command.GetAutoLogonUserName();
+            {   
+                logonAccount = command.GetWindowsLogonAccount(defaultValue: string.Empty, descriptionMsg: StringUtil.Loc("AutoLogonAccountNameDescription"));
                 GetAccountSegments(logonAccount, out domainName, out userName);
 
                 if ((string.IsNullOrEmpty(domainName) || domainName.Equals(".", StringComparison.CurrentCultureIgnoreCase)) && !logonAccount.Contains("@"))
@@ -86,25 +89,25 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
 
             DisplayWarningsIfAny(regHelper);        
-            UpdateRegistriesForAutoLogon(regHelper, userName, domainName, logonPassword);
+            UpdateRegistriesForAutoLogon(regHelper, userName, domainName, logonPassword);            
             ConfigurePowerOptions();
+            SaveAutoLogonSettings(domainName, userName);
         }
 
         public bool RestartNeeded()
         {
-            var regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>());            
-            regHelper.FetchAutoLogonUserDetails(out string userName, out string domainName);
-            if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(domainName))
+            if (!_store.IsAutoLogonConfigured())
             {
-                throw new InvalidOperationException(StringUtil.Loc("AutoLogonNotConfigured"));
+                return false;
             }
 
-            return !_windowsServiceHelper.HasActiveSession(domainName, userName);
+            var autoLogonSettings = _store.GetAutoLogonSettings();
+            return !_windowsServiceHelper.HasActiveSession(autoLogonSettings.UserDomainName, autoLogonSettings.UserName);
         }
 
         public void Unconfigure()
         {
-            if(!_windowsServiceHelper.IsRunningInElevatedMode())
+            if (!_windowsServiceHelper.IsRunningInElevatedMode())
             {
                 Trace.Error("Needs Administrator privileges to unconfigure an agent running with AutoLogon capability.");          
                 throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonRemoval"));
@@ -132,24 +135,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 var securityIdForTheUser = _windowsServiceHelper.GetSecurityId(domainName, userName);
                 AutoLogonRegistryManager regHelperForDiffUser = new AutoLogonRegistryManager(regManager, securityIdForTheUser);
                 regHelperForDiffUser.RevertOriginalRegistrySettings();
-            }            
-        }
-
-        public bool IsAutoLogonConfigured()
-        {
-            //ToDo: Different user scenario
-            
-            //find out the path for startup process if it is same as current agent location, yes it was configured
-            var regHelper = new AutoLogonRegistryManager(HostContext.GetService<IWindowsRegistryManager>(), null);
-            var startupCommand = regHelper.GetStartupProcessCommand();
-
-            if (string.IsNullOrEmpty(startupCommand))
-            {
-                return false;
             }
 
-            var expectedStartupProcessDir = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Bin));
-            return Path.GetDirectoryName(startupCommand).Equals(expectedStartupProcessDir, StringComparison.CurrentCultureIgnoreCase);
+            Trace.Info("Deleting the autologon settings now.");
+            _store.DeleteAutoLogonSettings();
+            Trace.Info("Successfully deleted the autologon settings.");
+        }
+
+        private void SaveAutoLogonSettings(string domainName, string userName)
+        {
+            Trace.Entering();
+            var settings = new AutoLogonSettings()
+            {
+                UserDomainName = domainName,
+                UserName = userName
+            };            
+            _store.SaveAutoLogonSettings(settings);
+            Trace.Info("Saved the autologon settings");
         }
 
         private void UpdateRegistriesForAutoLogon(AutoLogonRegistryManager regHelper, string userName, string domainName, string logonPassword)
@@ -199,7 +201,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
         }
 
-        private void ConfigurePowerOptions()
+        private async Task ConfigurePowerOptions()
         {
             var whichUtil = HostContext.GetService<IWhichUtil>();
             var filePath = whichUtil.Which("powercfg.exe", require:true);
@@ -222,7 +224,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                             Trace.Error(message.Data);
                         };
 
-                        processInvoker.ExecuteAsync(
+                        await processInvoker.ExecuteAsync(
                                 workingDirectory: string.Empty,
                                 fileName: filePath,
                                 arguments: command,

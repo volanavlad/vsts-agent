@@ -17,14 +17,17 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         private Mock<INativeWindowsServiceHelper> _windowsServiceHelper;
         private Mock<IPromptManager> _promptManager;
         private Mock<IProcessInvoker> _processInvoker;
+        private Mock<IConfigurationStore> _store;
+        private MockRegistryManager _mockRegManager;
+        private AutoLogonSettings _autoLogonSettings;
         private CommandSettings _command;
+
         private string _sid = "007";
         private string _userName = "ironMan";
         private string _domainName = "avengers";
-        private MockRegistryManager _mockRegManager;
+        
         private bool _powerCfgCalledForACOption = false;
         private bool _powerCfgCalledForDCOption = false;
-        private bool _stopListenerCalled = false;
 
         [Fact]
         [Trait("Level", "L0")]
@@ -175,7 +178,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             Assert.True(validationPassed, $"UnConfigure (verifying backupkeys - {checkBackupKeys}) : {WellKnownRegistries.AutoLogonPassword} Key value is not correct. Expected - {expectedValue} Actual - {autologonPwdValue}");
 
             //when done with reverting back the original settings we need to make sure we dont leave behind any extra setting
-            if(!checkBackupKeys)
+            if (!checkBackupKeys)
             {
                 //user specific
                 var startupProcessPath = string.Format($@"{userRegistryRootPath}\{RegistryConstants.RegPaths.StartupProcess}");
@@ -215,7 +218,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         private void SetupTestEnv(TestHostContext hc)
         {
             _powerCfgCalledForACOption = _powerCfgCalledForDCOption = false;
-            _stopListenerCalled = false;
+            _autoLogonSettings = null;
 
             _windowsServiceHelper = new Mock<INativeWindowsServiceHelper>();
             hc.SetSingleton<INativeWindowsServiceHelper>(_windowsServiceHelper.Object);
@@ -269,11 +272,22 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                     "--windowslogonaccount", "wont be honored",
                     "--windowslogonpassword", "sssh"
                 });
+            
+            _store = new Mock<IConfigurationStore>();
+            _store.Setup(x => x.SaveAutoLogonSettings(It.IsAny<AutoLogonSettings>()))
+                .Callback((AutoLogonSettings settings) =>
+                {
+                    _autoLogonSettings = settings;
+                });
+            
+            _store.Setup(x => x.IsAutoLogonConfigured()).Returns(() => _autoLogonSettings != null);
+            _store.Setup(x => x.GetAutoLogonSettings()).Returns(() => _autoLogonSettings);
+            hc.SetSingleton<IConfigurationStore>(_store.Object);
         }
 
         private int SetPowerCfgFlags(bool isForACOption)
         {
-            if(isForACOption)
+            if (isForACOption)
             {
                 _powerCfgCalledForACOption = true;
             }
@@ -400,7 +414,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         public void SetKeyValue(string path, string keyName, string keyValue)
         {
             var key = string.Concat(path, keyName);
-            if(_regStore.ContainsKey(key))
+            if (_regStore.ContainsKey(key))
             {
                 _regStore[key] = keyValue;
             }

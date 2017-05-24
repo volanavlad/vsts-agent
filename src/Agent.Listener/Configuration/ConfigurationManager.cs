@@ -372,15 +372,19 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 else
                 {
 #if OS_WINDOWS
-                    //running as process, unconfigure autologon if it was configured
-                    var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
-                    if (!autoLogonConfigManager.IsAutoLogonConfigured())
+                    //running as process, unconfigure autologon if it was configured                    
+                    if (_store.IsAutoLogonConfigured())
+                    {
+                        var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
+                        autoLogonConfigManager.Unconfigure();                        
+                    }
+                    else
                     {
                         Trace.Info("AutoLogon was not configured on the agent.");
                     }
-                    autoLogonConfigManager.Unconfigure();
 #endif
                 }
+                
                 //delete agent from the server
                 currentAction = StringUtil.Loc("UnregisteringAgent");
                 _term.WriteLine(currentAction);

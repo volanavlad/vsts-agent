@@ -42,7 +42,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             // We use NetworkService as default account for build and release agent
             // We use Local System as default account for deployment agent
             NTAccount defaultServiceAccount = command.DeploymentGroup ? _windowsServiceHelper.GetDefaultAdminServiceAccount() : _windowsServiceHelper.GetDefaultServiceAccount();
-            string logonAccount = command.GetWindowsLogonAccount(defaultValue: defaultServiceAccount.ToString());
+            string logonAccount = command.GetWindowsLogonAccount(defaultValue: defaultServiceAccount.ToString(), descriptionMsg: StringUtil.Loc("WindowsLogonAccountNameDescription"));
 
             string domainName;
             string userName;

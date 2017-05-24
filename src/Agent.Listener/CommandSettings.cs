@@ -30,13 +30,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
             Constants.Agent.CommandLine.Flags.AddDeploymentGroupTags,
             Constants.Agent.CommandLine.Flags.Commit,
             Constants.Agent.CommandLine.Flags.DeploymentGroup,
+            Constants.Agent.CommandLine.Flags.EnableAutoLogon,
             Constants.Agent.CommandLine.Flags.Help,
             Constants.Agent.CommandLine.Flags.MachineGroup,
             Constants.Agent.CommandLine.Flags.Replace,
             Constants.Agent.CommandLine.Flags.RunAsService,
             Constants.Agent.CommandLine.Flags.Unattended,
-            Constants.Agent.CommandLine.Flags.Version,
-            Constants.Agent.CommandLine.Flags.EnableAutoLogon
+            Constants.Agent.CommandLine.Flags.Version            
         };
 
         private readonly string[] validArgs =
@@ -180,15 +180,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
                 defaultValue: true);
         }
 
-        public string GetAutoLogonUserName()
-        {
-            return GetArgOrPrompt(
-                name: Constants.Agent.CommandLine.Args.WindowsLogonAccount,
-                description: StringUtil.Loc("AutoLogonAccountNameDescription"),
-                defaultValue: string.Empty,
-                validator: Validators.NTAccountValidator);
-        }
-
         public bool GetDeploymentGroupTagsRequired()
         {
             return TestFlag(Constants.Agent.CommandLine.Flags.AddMachineGroupTags)
@@ -310,11 +301,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
                 validator: Validators.NonEmptyValidator);
         }
 
-        public string GetWindowsLogonAccount(string defaultValue)
+        public string GetWindowsLogonAccount(string defaultValue, string descriptionMsg)
         {
             return GetArgOrPrompt(
                 name: Constants.Agent.CommandLine.Args.WindowsLogonAccount,
-                description: StringUtil.Loc("WindowsLogonAccountNameDescription"),
+                description: descriptionMsg,
                 defaultValue: defaultValue,
                 validator: Validators.NTAccountValidator);
         }
