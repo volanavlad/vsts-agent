@@ -339,6 +339,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             else
             {                
                 ConfigureAutoLogonIfNeeded(command);
+                //Imp: The machine may restart if the autologon user is not same as the current user
+                //if you are adding code after this, keep that in mind
             }
 
 #elif OS_LINUX || OS_OSX
@@ -480,29 +482,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             {                
                 var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
                 autoLogonConfigManager.Configure(command);
-
-                if (autoLogonConfigManager.RestartNeeded())
-                {
-                    Trace.Info("AutoLogon is configured for a different user than the current user. Machine needs a restart.");
-                    _term.WriteLine(StringUtil.Loc("RestartMessage"));
-                    var shallRestart = command.GetRestartNow();
-                    if (shallRestart)
-                    {
-                        var whichUtil = HostContext.GetService<IWhichUtil>();
-                        var shutdownExePath = whichUtil.Which("shutdown.exe");
-
-                        Trace.Info("Restarting the machine in 5 seconds");
-                        _term.WriteLine(StringUtil.Loc("RestartIn5SecMessage"));
-                        string msg = StringUtil.Loc("ShutdownMessage");
-                        //we are not using ProcessInvoker here as today it is not designed for 'fire and forget' pattern
-                        //ExecuteAsync API of ProcessInvoker waits for the process to exit
-                        Process.Start(shutdownExePath, $"-r -t 5 -c {msg}");
-                    }
-                    else
-                    {
-                        Trace.Info("No restart happened. As the interactive session is configured for a different user agent will not be launched");
-                    }
-                }
             }
             catch(Exception ex)
             {

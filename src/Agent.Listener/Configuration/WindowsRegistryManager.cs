@@ -10,53 +10,77 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     [ServiceLocator(Default = typeof(WindowsRegistryManager))]
     public interface IWindowsRegistryManager : IAgentService
     {
-        string GetKeyValue(string path, string subKeyName);
-        void SetKeyValue(string path, string subKeyName, string subKeyValue);
-        void DeleteKey(RegistryScope scope, string path, string subKeyName);
+        string GetValue(RegistryHive hive, string subKeyName, string name);
+        void SetValue(RegistryHive hive, string subKeyName, string name, string value);
+        void DeleteValue(RegistryHive hive, string subKeyName, string name);
         bool RegsitryExists(string securityId);
     }
 
     public class WindowsRegistryManager : AgentService, IWindowsRegistryManager
     {
-        public void DeleteKey(RegistryScope scope, string path, string subKeyName)
+        public void DeleteValue(RegistryHive hive, string subKeyName, string name)
         {
-            RegistryKey key = null;
-            switch (scope)
+            RegistryKey key = OpenRegistryKey(hive, subKeyName, true);
+            using(key)
             {
-                case RegistryScope.CurrentUser :
-                    key = Registry.CurrentUser.OpenSubKey(path, true);                    
-                    break;
-                case RegistryScope.DifferentUser :
-                    key = Registry.Users.OpenSubKey(path, true);
-                    break;
-                case RegistryScope.LocalMachine:
-                    key = Registry.LocalMachine.OpenSubKey(path, true);                    
-                    break;
-            }
-
-            if (key != null)
-            {
-                using(key)
-                {
-                    key.DeleteValue(subKeyName, false);
-                }
+                key.DeleteValue(name, false);
             }
         }
 
-        public string GetKeyValue(string path, string subKeyName)
+        public string GetValue(RegistryHive hive, string subKeyName, string name)
         {
-            var regValue = Registry.GetValue(path, subKeyName, null);
-            return regValue != null ? regValue.ToString() : null;
+            RegistryKey key = OpenRegistryKey(hive, subKeyName, false);
+            using(key)
+            {
+                var value = key.GetValue(name, null);
+                return value != null ? value.ToString() : null;
+            }
         }
 
-        public void SetKeyValue(string path, string subKeyName, string subKeyValue)
+        public void SetValue(RegistryHive hive, string subKeyName, string name, string value)
         {
-            Registry.SetValue(path, subKeyName, subKeyValue, RegistryValueKind.String);
+            RegistryKey key = OpenRegistryKey(hive, subKeyName, true);
+            using(key)
+            {
+                key.SetValue(name, value);
+            }
         }
 
         public bool RegsitryExists(string securityId)
         {
             return Registry.Users.OpenSubKey(securityId) != null;
+        }
+
+        private RegistryKey OpenRegistryKey(RegistryHive hive, string subKeyName, bool writable = true)
+        {
+            RegistryKey key = null;
+            try
+            {
+                switch (hive)
+                {
+                    case RegistryHive.CurrentUser :
+                        key = Registry.CurrentUser.OpenSubKey(subKeyName, writable);                    
+                        break;
+                    case RegistryHive.Users :
+                        key = Registry.Users.OpenSubKey(subKeyName, writable);
+                        break;
+                    case RegistryHive.LocalMachine:
+                        key = Registry.LocalMachine.OpenSubKey(subKeyName, writable);                    
+                        break;
+                }
+
+                if (key == null)
+                {
+                    throw new InvalidOperationException(StringUtil.Loc("InvalidRegKey"));
+                }
+
+                return key;
+            }
+            catch(Exception ex)
+            {
+                Trace.Error(ex);
+                throw;
+            }
         }
     }
 }
