@@ -73,7 +73,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 }                   
                     
                 Trace.Error("Invalid credential entered.");
-                _terminal.WriteLine(StringUtil.Loc("InvalidAutoLogonCredential"));
+                _terminal.WriteError(StringUtil.Loc("InvalidAutoLogonCredential"));
             }
 
             _autoLogonRegManager.UpdateRegistrySettings(command, domainName, userName, logonPassword);
@@ -134,6 +134,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                         processInvoker.ErrorDataReceived += delegate (object sender, ProcessDataReceivedEventArgs message)
                         {
                             Trace.Error(message.Data);
+                            _terminal.WriteError(message.Data);
                         };
 
                         await processInvoker.ExecuteAsync(
