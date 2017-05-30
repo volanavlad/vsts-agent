@@ -55,8 +55,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         void CreateVstsAgentRegistryKey();
 
         void DeleteVstsAgentRegistryKey();
-
-        bool HasActiveSession(string domainName, string userName);
         
         string GetSecurityId(string domainName, string userName);
         
@@ -765,11 +763,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     tfsKey.Dispose();
                 }
             }
-        }        
-
-        public bool HasActiveSession(string domainName, string userName)
-        {
-            return EnumerateUsers.IsActiveSessionExists(domainName, userName);
         }
 
         public string GetSecurityId(string domainName, string userName)
@@ -970,136 +963,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
 
             internal static string DefaultPassword = "DefaultPassword";
-        }
-
-        internal static class EnumerateUsers
-        {
-            [DllImport("wtsapi32.dll")]
-            private static extern IntPtr WTSOpenServer([MarshalAs(UnmanagedType.LPStr)] String pServerName);
-
-            [DllImport("wtsapi32.dll")]
-            private static extern void WTSCloseServer(IntPtr hServer);
-
-            [DllImport("wtsapi32.dll")]
-            private static extern Int32 WTSEnumerateSessions(
-                IntPtr hServer,
-                [MarshalAs(UnmanagedType.U4)] Int32 Reserved,
-                [MarshalAs(UnmanagedType.U4)] Int32 Version,
-                ref IntPtr ppSessionInfo,
-                [MarshalAs(UnmanagedType.U4)] ref Int32 pCount);
-
-            [DllImport("wtsapi32.dll")]
-            private static extern void WTSFreeMemory(IntPtr pMemory);
-
-            [DllImport("Wtsapi32.dll")]
-            private static extern bool WTSQuerySessionInformation(
-                System.IntPtr hServer, int sessionId, WTS_INFO_CLASS wtsInfoClass, out System.IntPtr ppBuffer, out uint pBytesReturned);
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct WTS_SESSION_INFO
-            {
-                public Int32 SessionID;
-
-                [MarshalAs(UnmanagedType.LPStr)]
-                public String pWinStationName;
-
-                public WTS_CONNECTSTATE_CLASS State;
-            }
-
-            public enum WTS_INFO_CLASS
-            {
-                WTSInitialProgram,
-                WTSApplicationName,
-                WTSWorkingDirectory,
-                WTSOEMId,
-                WTSSessionId,
-                WTSUserName,
-                WTSWinStationName,
-                WTSDomainName,
-                WTSConnectState,
-                WTSClientBuildNumber,
-                WTSClientName,
-                WTSClientDirectory,
-                WTSClientProductId,
-                WTSClientHardwareId,
-                WTSClientAddress,
-                WTSClientDisplay,
-                WTSClientProtocolType
-            }
-            public enum WTS_CONNECTSTATE_CLASS
-            {
-                WTSActive,
-                WTSConnected,
-                WTSConnectQuery,
-                WTSShadow,
-                WTSDisconnected,
-                WTSIdle,
-                WTSListen,
-                WTSReset,
-                WTSDown,
-                WTSInit
-            }
-
-            public static IntPtr OpenServer(String Name)
-            {
-                IntPtr server = WTSOpenServer(Name);
-                return server;
-            }
-
-            public static void CloseServer(IntPtr ServerHandle)
-            {
-                WTSCloseServer(ServerHandle);
-            }
-
-            public static bool IsActiveSessionExists(string testUserDomain, string testUsername)
-            {
-                var serverHandle = IntPtr.Zero;
-                serverHandle = OpenServer(Environment.MachineName);
-                var SessionInfoPtr = IntPtr.Zero;
-
-                try
-                {
-                    var userPtr = IntPtr.Zero;
-                    var domainPtr = IntPtr.Zero;
-                    var sessionCount = 0;
-                    var retVal = WTSEnumerateSessions(serverHandle, 0, 1, ref SessionInfoPtr, ref sessionCount);
-                    var dataSize = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
-                    var currentSession = SessionInfoPtr;
-
-                    if (retVal != 0)
-                    {
-                        for (var i = 0; i < sessionCount; i++)
-                        {
-                            uint bytes = 0;
-                            var si = (WTS_SESSION_INFO)Marshal.PtrToStructure(currentSession, typeof(WTS_SESSION_INFO));
-                            currentSession += dataSize;
-
-                            WTSQuerySessionInformation(serverHandle, si.SessionID, WTS_INFO_CLASS.WTSUserName, out userPtr, out bytes);
-                            WTSQuerySessionInformation(serverHandle, si.SessionID, WTS_INFO_CLASS.WTSDomainName, out domainPtr, out bytes);
-
-                            var domain = Marshal.PtrToStringAnsi(domainPtr);
-                            var username = Marshal.PtrToStringAnsi(userPtr);
-
-                            if (testUserDomain.Equals(domain, StringComparison.OrdinalIgnoreCase) &&
-                                testUsername.Equals(username, StringComparison.OrdinalIgnoreCase) &&
-                                si.State == WTS_CONNECTSTATE_CLASS.WTSActive)
-                            {
-                                WTSFreeMemory(userPtr);
-                                WTSFreeMemory(domainPtr);
-                                return true;
-                            }
-                            WTSFreeMemory(userPtr);
-                            WTSFreeMemory(domainPtr);
-                        }
-                    }
-                }
-                finally
-                {
-                    WTSFreeMemory(SessionInfoPtr);
-                    CloseServer(serverHandle);
-                }
-                return false;
-            }
         }
 
         // Class to represent a failure action which consists of a recovery

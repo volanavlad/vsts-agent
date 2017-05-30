@@ -122,6 +122,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
 
                 // Run the agent interactively or as service
                 Trace.Verbose($"Run as service: '{runAsService}'");
+
+                //Get the startup type of the agent i.e., autostartup, windowsservice, manualinteractive
+                var startupType = command.GetStartupType();
+                Trace.Info($"Startup type of the agent - {startupType}");
+
                 return await RunAsync(TokenSource.Token, settings, runAsService);
 
                 //}

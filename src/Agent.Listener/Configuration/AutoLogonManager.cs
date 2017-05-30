@@ -156,7 +156,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         private void RestartBasedOnUserInput(CommandSettings command)
         {
-            Trace.Info("AutoLogon is configured for a different user than the current user. Machine needs a restart.");            
+            Trace.Info("Asking the user to restart the machine to launch agent and for autologon settings to take effect.");
             _terminal.WriteLine(StringUtil.Loc("RestartMessage"));
 
             var shallRestart = command.GetRestartNow();

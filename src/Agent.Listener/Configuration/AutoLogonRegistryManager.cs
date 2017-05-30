@@ -245,7 +245,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             var filePath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Root), "run.cmd");
 
             //extra " are to handle the spaces in the file path (if any)
-            var startupCommand = $@"{cmdExePath} /D /S /C start ""Agent with AutoLogon"" ""{filePath}""";
+            var startupCommand = $@"{cmdExePath} /D /S /C start ""Agent with AutoLogon"" ""{filePath}"" --startuptype autostartup";            
             Trace.Info($"Setting startup command as '{startupCommand}'");
 
             return startupCommand;

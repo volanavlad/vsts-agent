@@ -50,6 +50,7 @@ namespace AgentService
                                 lock (ServiceLock)
                                 {
                                     AgentListener = CreateAgentListener();
+                                    WriteInfo(string.Format("Agent.Listner.exe arguments - {0}", AgentListener.StartInfo.Arguments));
                                     AgentListener.OutputDataReceived += AgentListener_OutputDataReceived;
                                     AgentListener.ErrorDataReceived += AgentListener_ErrorDataReceived;
                                     AgentListener.Start();
@@ -151,7 +152,7 @@ namespace AgentService
             string exeLocation = Assembly.GetEntryAssembly().Location;
             string agentExeLocation = Path.Combine(Path.GetDirectoryName(exeLocation), "Agent.Listener.exe");
             Process newProcess = new Process();
-            newProcess.StartInfo = new ProcessStartInfo(agentExeLocation, "run");
+            newProcess.StartInfo = new ProcessStartInfo(agentExeLocation, "run --startuptype windowsservice");
             newProcess.StartInfo.CreateNoWindow = true;
             newProcess.StartInfo.UseShellExecute = false;
             newProcess.StartInfo.RedirectStandardInput = true;

@@ -54,6 +54,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
             Constants.Agent.CommandLine.Args.Password,
             Constants.Agent.CommandLine.Args.Pool,
             Constants.Agent.CommandLine.Args.ProjectName,
+            Constants.Agent.CommandLine.Args.StartupType,
             Constants.Agent.CommandLine.Args.Token,
             Constants.Agent.CommandLine.Args.Url,
             Constants.Agent.CommandLine.Args.UserName,
@@ -346,6 +347,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
         public string GetNotificationSocketAddress()
         {
             return GetArg(Constants.Agent.CommandLine.Args.NotificationSocketAddress);
+        }
+
+        ///This is used to find out the source from where the agent.listner.exe was launched at the time of run
+        public string GetStartupType()
+        {
+            return GetArg(Constants.Agent.CommandLine.Args.StartupType);
         }
 
         //

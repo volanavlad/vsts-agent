@@ -51,6 +51,8 @@ namespace Microsoft.VisualStudio.Services.Agent
 
             public static class CommandLine
             {
+                //if you are adding a new arg, please make sure you update the
+                //validArgs array as well present in the CommandSettings.cs
                 public static class Args
                 {
                     public static readonly string Agent = "agent";
@@ -73,6 +75,7 @@ namespace Microsoft.VisualStudio.Services.Agent
                     public static readonly string Password = "password";
                     public static readonly string Token = "token";
                     public static readonly string WindowsLogonPassword = "windowslogonpassword";
+                    public static readonly string StartupType = "startuptype";
                     public static string[] Secrets => new[]
                     {
                         Password,
