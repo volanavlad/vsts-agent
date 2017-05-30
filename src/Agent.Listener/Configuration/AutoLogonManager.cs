@@ -12,14 +12,14 @@ using System.Threading.Tasks;
 
 namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 {
-    [ServiceLocator(Default = typeof(AutoLogonConfigurationManager))]
-    public interface IAutoLogonConfigurationManager : IAgentService
+    [ServiceLocator(Default = typeof(AutoLogonManager))]
+    public interface IAutoLogonManager : IAgentService
     {
-        Task Configure(CommandSettings command);
+        Task ConfigureAsync(CommandSettings command);
         void Unconfigure();
     }
 
-    public class AutoLogonConfigurationManager : AgentService, IAutoLogonConfigurationManager
+    public class AutoLogonManager : AgentService, IAutoLogonManager
     {
         private ITerminal _terminal;
         private INativeWindowsServiceHelper _windowsServiceHelper;
@@ -35,12 +35,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             _store = hostContext.GetService<IConfigurationStore>();
         }
 
-        public async Task Configure(CommandSettings command)
+        public async Task ConfigureAsync(CommandSettings command)
         {
             if (!_windowsServiceHelper.IsRunningInElevatedMode())
             {
                 Trace.Error("Needs Administrator privileges to configure agent with AutoLogon capability.");
-                Trace.Error("You will need to unconfigure the agent and then re-configure with Administrative rights");            
+                Trace.Info("You will need to unconfigure the agent and then re-configure with Administrative rights");
                 throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonCapability"));
             }
 
@@ -61,7 +61,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 Trace.Info("LogonAccount after transforming: {0}, user: {1}, domain: {2}", logonAccount, userName, domainName);
 
                 logonPassword = command.GetWindowsLogonPassword(logonAccount);
-                if (_windowsServiceHelper.IsValidCredential(domainName, userName, logonPassword))
+                if (_windowsServiceHelper.IsValidAutoLogonCredential(domainName, userName, logonPassword))
                 {
                     Trace.Info("Credential validation succeeded");
                     break;
@@ -69,58 +69,21 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 
                 if (command.Unattended)
                 {
-                    throw new SecurityException(StringUtil.Loc("InvalidWindowsCredential"));
-                }
+                    throw new SecurityException(StringUtil.Loc("InvalidAutoLogonCredential"));
+                }                   
                     
-                Trace.Error("Invalid credential entered");
-                _terminal.WriteLine(StringUtil.Loc("InvalidWindowsCredential"));
+                Trace.Error("Invalid credential entered.");
+                _terminal.WriteLine(StringUtil.Loc("InvalidAutoLogonCredential"));
             }
 
-            bool isCurrentUserSameAsAutoLogonUser = _windowsServiceHelper.HasActiveSession(domainName, userName);            
-            if (!isCurrentUserSameAsAutoLogonUser)
-            {
-                if (!_autoLogonRegManager.DoesRegistryExistForUser(domainName, userName))
-                {
-                    Trace.Error($"The autologon user '{logonAccount}' doesnt have a user profile on the machine. Please login once with the expected autologon user and reconfigure the agent again");
-                    throw new InvalidOperationException(StringUtil.Loc("NoUserProfile", logonAccount));
-                }
-            }
-            _autoLogonRegManager.LogWarnings(domainName, userName);
-            
-            _autoLogonRegManager.UpdateRegistrySettings(domainName, userName);
-            _windowsServiceHelper.SetAutoLogonPassword(logonPassword);    
+            _autoLogonRegManager.UpdateRegistrySettings(command, domainName, userName, logonPassword);
+            _windowsServiceHelper.SetAutoLogonPassword(logonPassword);
+
             await ConfigurePowerOptions();
+            
             SaveAutoLogonSettings(domainName, userName);
-
-            if (!_windowsServiceHelper.HasActiveSession(domainName, userName))
-            {
-                RestartBasedOnUserInput(command);
-            }
-        }
-
-        private void RestartBasedOnUserInput(CommandSettings command)
-        {
-            Trace.Info("AutoLogon is configured for a different user than the current user. Machine needs a restart.");            
-            _terminal.WriteLine(StringUtil.Loc("RestartMessage"));
-
-            var shallRestart = command.GetRestartNow();
-            if (shallRestart)
-            {
-                var whichUtil = HostContext.GetService<IWhichUtil>();
-                var shutdownExePath = whichUtil.Which("shutdown.exe");
-
-                Trace.Info("Restarting the machine in 5 seconds");
-                _terminal.WriteLine(StringUtil.Loc("RestartIn5SecMessage"));
-                string msg = StringUtil.Loc("ShutdownMessage");
-                //we are not using ProcessInvoker here as today it is not designed for 'fire and forget' pattern
-                //ExecuteAsync API of ProcessInvoker waits for the process to exit
-                Process.Start(shutdownExePath, $"-r -t 5 -c {msg}");
-            }
-            else
-            {
-                Trace.Info("No restart happened. As the interactive session is configured for a different user agent will not be launched");
-            }
-        }
+            RestartBasedOnUserInput(command);
+        }       
 
         public void Unconfigure()
         {
@@ -187,6 +150,32 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     _terminal.WriteError(StringUtil.Loc("PowerOptionsConfigError"));
                     Trace.Error(ex);
                 }
+            }
+        }
+
+        private void RestartBasedOnUserInput(CommandSettings command)
+        {
+            Trace.Info("AutoLogon is configured for a different user than the current user. Machine needs a restart.");            
+            _terminal.WriteLine(StringUtil.Loc("RestartMessage"));
+
+            var shallRestart = command.GetRestartNow();
+            if (shallRestart)
+            {
+                var whichUtil = HostContext.GetService<IWhichUtil>();
+                var shutdownExePath = whichUtil.Which("shutdown.exe");
+
+                Trace.Info("Restarting the machine in 5 seconds");
+                _terminal.WriteLine(StringUtil.Loc("RestartIn5SecMessage"));
+                string msg = StringUtil.Loc("ShutdownMessage");
+                //we are not using ProcessInvoker here as today it is not designed for 'fire and forget' pattern
+                //ExecuteAsync API of ProcessInvoker waits for the process to exit
+                var args = $@"-r -t 5 -c ""{msg}""";
+                Trace.Info($"Shutdown.exe path - {shutdownExePath}. Arguments - {args}");
+                Process.Start(shutdownExePath, $@"-r -t 5 -c ""{msg}""");
+            }
+            else
+            {
+                _terminal.WriteLine(StringUtil.Loc("NoRestartSuggestion"));
             }
         }
 

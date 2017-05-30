@@ -23,7 +23,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         private AutoLogonSettings _autoLogonSettings;
         private CommandSettings _command;
 
-        private string _sid = "007";
+        private string _sid = "001";
+        private string _sidForDifferentUser = "007";
         private string _userName = "ironMan";
         private string _domainName = "avengers";
         
@@ -33,17 +34,17 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public void TestAutoLogonConfiguration()
+        public async void TestAutoLogonConfiguration()
         {
             using (var hc = new TestHostContext(this))
             {
-                SetupTestEnv(hc);
+                SetupTestEnv(hc, _sid);
 
-                var iConfigManager = new AutoLogonConfigurationManager();
+                var iConfigManager = new AutoLogonManager();
                 iConfigManager.Initialize(hc);
-                iConfigManager.Configure(_command);
+                await iConfigManager.ConfigureAsync(_command);
 
-                VerifyRegistryChanges();
+                VerifyRegistryChanges(_sid);
                 Assert.True(_powerCfgCalledForACOption);
                 Assert.True(_powerCfgCalledForDCOption);
             }
@@ -52,20 +53,17 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public void TestAutoLogonConfigurationForDifferentUser()
+        public async void TestAutoLogonConfigurationForDifferentUser()
         {
             using (var hc = new TestHostContext(this))
             {
-                SetupTestEnv(hc);
+                SetupTestEnv(hc, _sidForDifferentUser);
 
-                //override behavior
-                _windowsServiceHelper.Setup(x => x.HasActiveSession(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
-
-                var iConfigManager = new AutoLogonConfigurationManager();
+                var iConfigManager = new AutoLogonManager();
                 iConfigManager.Initialize(hc);
-                iConfigManager.Configure(_command);
+                await iConfigManager.ConfigureAsync(_command);
                 
-                VerifyRegistryChanges(true);
+                VerifyRegistryChanges(_sidForDifferentUser);
                 Assert.True(_powerCfgCalledForACOption);
                 Assert.True(_powerCfgCalledForDCOption);
             }
@@ -74,7 +72,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public void TestAutoLogonUnConfigure()
+        public async void TestAutoLogonUnConfigure()
         {
             //strategy-
             //1. fill some existing values in the registry
@@ -85,27 +83,28 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 
             using (var hc = new TestHostContext(this))
             {
-                SetupTestEnv(hc);
-                SetupRegistrySettings(false);
+                SetupTestEnv(hc, _sid);
+                SetupRegistrySettings(_sid);
 
-                var iConfigManager = new AutoLogonConfigurationManager();
+                var iConfigManager = new AutoLogonManager();
                 iConfigManager.Initialize(hc);
-                iConfigManager.Configure(_command);
+                await iConfigManager.ConfigureAsync(_command);
 
                 //make sure the backup was taken for the keys
-                RegistryVerificationForBackup(false);
+                RegistryVerificationForBackup(_sid);
 
+                // Debugger.Launch();
                 iConfigManager.Unconfigure();
-
+                
                 //original values were reverted
-                RegistryVerificationForUnConfigure(false);
+                RegistryVerificationForUnConfigure(_sid);
             }
         }
 
         [Fact]
         [Trait("Level", "L0")]
         [Trait("Category", "Agent")]
-        public void TestAutoLogonUnConfigureForDifferentUser()
+        public async void TestAutoLogonUnConfigureForDifferentUser()
         {
             //strategy-
             //1. fill some existing values in the registry
@@ -116,36 +115,29 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 
             using (var hc = new TestHostContext(this))
             {
-                SetupTestEnv(hc);
-                //override behavior
-                _windowsServiceHelper.Setup(x => x.HasActiveSession(It.IsAny<string>(), It.IsAny<string>())).Returns(false);
-                SetupRegistrySettings(true);
+                SetupTestEnv(hc, _sidForDifferentUser);
 
-                var iConfigManager = new AutoLogonConfigurationManager();
+                SetupRegistrySettings(_sidForDifferentUser);
+
+                var iConfigManager = new AutoLogonManager();
                 iConfigManager.Initialize(hc);
-                iConfigManager.Configure(_command);
+                await iConfigManager.ConfigureAsync(_command);
 
                 //make sure the backup was taken for the keys
-                RegistryVerificationForBackup(true);
+                RegistryVerificationForBackup(_sidForDifferentUser);
                 
                 iConfigManager.Unconfigure();
 
                 //original values were reverted
-                RegistryVerificationForUnConfigure(true);
+                RegistryVerificationForUnConfigure(_sidForDifferentUser);
             }
         }
 
-        private void RegistryVerificationForBackup(bool differentUser)
+        private void RegistryVerificationForBackup(string securityId)
         {
-            //screen saver (user specific)
-            if (!differentUser)
-            {
-                ValidateRegistryValue(RegistryHive.CurrentUser, RegistryConstants.SubKeys.ScreenSaver, GetBackupValueName(RegistryConstants.ValueNames.ScreenSaver), "1");
-            }
-            else
-            {
-                ValidateRegistryValue(RegistryHive.Users, $"{_sid}\\{RegistryConstants.SubKeys.ScreenSaver}", GetBackupValueName(RegistryConstants.ValueNames.ScreenSaver), "1");
-            }
+            //screen saver (user specific)            
+            ValidateRegistryValue(RegistryHive.Users, $"{securityId}\\{RegistryConstants.SubKeys.ScreenSaver}", GetBackupValueName(RegistryConstants.ValueNames.ScreenSaver), "1");
+            
 
             //HKLM setting
             ValidateRegistryValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.AutoLogon, GetBackupValueName(RegistryConstants.ValueNames.AutoLogon), "0");
@@ -159,17 +151,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             return string.Concat(RegistryConstants.BackupKeyPrefix, valueName);
         }
 
-        private void RegistryVerificationForUnConfigure(bool differentUser)
+        private void RegistryVerificationForUnConfigure(string securityId)
         {
             //screen saver (user specific)
-            if (!differentUser)
-            {
-                ValidateRegistryValue(RegistryHive.CurrentUser, RegistryConstants.SubKeys.ScreenSaver, RegistryConstants.ValueNames.ScreenSaver, "1");
-            }
-            else
-            {
-                ValidateRegistryValue(RegistryHive.Users, $"{_sid}\\{RegistryConstants.SubKeys.ScreenSaver}", RegistryConstants.ValueNames.ScreenSaver, "1");
-            }
+            ValidateRegistryValue(RegistryHive.Users, $"{securityId}\\{RegistryConstants.SubKeys.ScreenSaver}", RegistryConstants.ValueNames.ScreenSaver, "1");
 
             //HKLM setting
             ValidateRegistryValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.AutoLogon, RegistryConstants.ValueNames.AutoLogon, "0");
@@ -179,20 +164,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 
             //when done with reverting back the original settings we need to make sure we dont leave behind any extra setting            
             //user specific
-            if (!differentUser)
-            {
-                ValidateRegistryValue(RegistryHive.CurrentUser, RegistryConstants.SubKeys.StartupProcess, RegistryConstants.ValueNames.StartupProcess, null);
-            }
-            else
-            {
-                ValidateRegistryValue(RegistryHive.Users, $"{_sid}\\{RegistryConstants.SubKeys.StartupProcess}", RegistryConstants.ValueNames.StartupProcess, null);
-            }                
-
-            //machine specific
-            ValidateRegistryValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.LegalNotice, RegistryConstants.ValueNames.LegalNoticeText, null);
+            ValidateRegistryValue(RegistryHive.Users, $"{securityId}\\{RegistryConstants.SubKeys.StartupProcess}", RegistryConstants.ValueNames.StartupProcess, null);
         }
 
-        private void SetupRegistrySettings(bool differentUser = false)
+        private void SetupRegistrySettings(string securityId)
         {
             //HKLM setting
             _mockRegManager.SetValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.AutoLogon, RegistryConstants.ValueNames.AutoLogon, "0");
@@ -201,17 +176,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             _mockRegManager.SetValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.AutoLogon, RegistryConstants.ValueNames.AutoLogonPassword, "xyz");
             
             //screen saver (user specific)
-            if (!differentUser)
-            {
-                _mockRegManager.SetValue(RegistryHive.CurrentUser, RegistryConstants.SubKeys.ScreenSaver, RegistryConstants.ValueNames.ScreenSaver, "1");
-            }
-            else
-            {
-                _mockRegManager.SetValue(RegistryHive.Users, $"{_sid}\\{RegistryConstants.SubKeys.ScreenSaver}", RegistryConstants.ValueNames.ScreenSaver, "1");
-            }
+            _mockRegManager.SetValue(RegistryHive.Users, $"{securityId}\\{RegistryConstants.SubKeys.ScreenSaver}", RegistryConstants.ValueNames.ScreenSaver, "1");
         }
 
-        private void SetupTestEnv(TestHostContext hc)
+        private void SetupTestEnv(TestHostContext hc, string securityId)
         {
             _powerCfgCalledForACOption = _powerCfgCalledForDCOption = false;
             _autoLogonSettings = null;
@@ -234,10 +202,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                     It.IsAny<bool>())) // unattended
                 .Returns(string.Format(@"{0}\{1}", _domainName, _userName));
 
-            _windowsServiceHelper.Setup(x => x.IsValidCredential(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).Returns(true);
+            _windowsServiceHelper.Setup(x => x.IsValidAutoLogonCredential(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).Returns(true);
             _windowsServiceHelper.Setup(x => x.SetAutoLogonPassword(It.IsAny<string>()));
-            _windowsServiceHelper.Setup(x => x.HasActiveSession(It.IsAny<string>(), It.IsAny<string>())).Returns(true);             
-            _windowsServiceHelper.Setup(x => x.GetSecurityId(It.IsAny<string>(), It.IsAny<string>())).Returns(_sid);
+            _windowsServiceHelper.Setup(x => x.GetSecurityId(It.IsAny<string>(), It.IsAny<string>())).Returns(() => securityId);
             _windowsServiceHelper.Setup(x => x.IsRunningInElevatedMode()).Returns(true);
 
             _processInvoker = new Mock<IProcessInvoker>();
@@ -247,7 +214,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             _processInvoker.Setup(x => x.ExecuteAsync(
                                                 It.IsAny<String>(), 
                                                 "powercfg.exe", 
-                                                "/Change monitor-timeout-ac 0", 
+                                                "/Change monitor-timeout-ac 0",
                                                 null,
                                                 It.IsAny<CancellationToken>())).Returns(Task.FromResult<int>(SetPowerCfgFlags(true)));
 
@@ -266,7 +233,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                 new[]
                 {
                     "--windowslogonaccount", "wont be honored",
-                    "--windowslogonpassword", "sssh"
+                    "--windowslogonpassword", "sssh",
+                    "--DisableScreenSaver"
                 });
             
             _store = new Mock<IConfigurationStore>();
@@ -278,6 +246,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             
             _store.Setup(x => x.IsAutoLogonConfigured()).Returns(() => _autoLogonSettings != null);
             _store.Setup(x => x.GetAutoLogonSettings()).Returns(() => _autoLogonSettings);
+
+            
+
             hc.SetSingleton<IConfigurationStore>(_store.Object);
 
             hc.SetSingleton<IAutoLogonRegistryManager>(new AutoLogonRegistryManager());
@@ -296,21 +267,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             return 0;
         }
 
-        public void VerifyRegistryChanges(bool differentUser = false)
+        public void VerifyRegistryChanges(string securityId)
         {
             ValidateRegistryValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.AutoLogon, RegistryConstants.ValueNames.AutoLogon, "1");
             ValidateRegistryValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.AutoLogon, RegistryConstants.ValueNames.AutoLogonUserName, _userName);            
             ValidateRegistryValue(RegistryHive.LocalMachine, RegistryConstants.SubKeys.AutoLogon, RegistryConstants.ValueNames.AutoLogonPassword, null);
-
-            if (!differentUser)
-            {
-                ValidateRegistryValue(RegistryHive.CurrentUser, RegistryConstants.SubKeys.ScreenSaver, RegistryConstants.ValueNames.ScreenSaver, "0");
-            }
-            else
-            {
-                ValidateRegistryValue(RegistryHive.Users, $"{_sid}\\{RegistryConstants.SubKeys.ScreenSaver}", RegistryConstants.ValueNames.ScreenSaver, "0");
-            }
-
+            
+            ValidateRegistryValue(RegistryHive.Users, $"{securityId}\\{RegistryConstants.SubKeys.ScreenSaver}", RegistryConstants.ValueNames.ScreenSaver, "0");
+            
             //todo: startup process validation
             // ValidateRegistryValue(WellKnownRegistries.StartupProcess, , usersid);
 
@@ -361,7 +325,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
             _regStore.Remove(key);
         }
 
-        public bool RegsitryExists(string securityId)
+        public bool SubKeyExists(RegistryHive hive, string subKeyName)
         {
             return true;
         }

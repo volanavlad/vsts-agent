@@ -30,11 +30,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
             Constants.Agent.CommandLine.Flags.AddDeploymentGroupTags,
             Constants.Agent.CommandLine.Flags.Commit,
             Constants.Agent.CommandLine.Flags.DeploymentGroup,
+            Constants.Agent.CommandLine.Flags.DisableScreenSaver,
             Constants.Agent.CommandLine.Flags.EnableAutoLogon,
             Constants.Agent.CommandLine.Flags.Help,
             Constants.Agent.CommandLine.Flags.MachineGroup,
             Constants.Agent.CommandLine.Flags.Replace,
             Constants.Agent.CommandLine.Flags.RunAsService,
+            Constants.Agent.CommandLine.Flags.RestartNow,
             Constants.Agent.CommandLine.Flags.Unattended,
             Constants.Agent.CommandLine.Flags.Version
         };
@@ -170,6 +172,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
                 name: Constants.Agent.CommandLine.Flags.EnableAutoLogon,
                 description: StringUtil.Loc("EnableAutoLogon"),
                 defaultValue: false);
+        }
+
+        public bool GetDisableScreenSaver()
+        {
+            return TestFlagOrPrompt(
+                name: Constants.Agent.CommandLine.Flags.DisableScreenSaver,
+                description: StringUtil.Loc("DisableScreenSaver"),
+                defaultValue: true);
         }
 
         public bool GetRestartNow()

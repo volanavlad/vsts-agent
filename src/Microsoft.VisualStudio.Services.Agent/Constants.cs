@@ -88,6 +88,8 @@ namespace Microsoft.VisualStudio.Services.Agent
                     public static readonly string Unconfigure = "remove";
                 }
 
+                //if you are adding a new flag, please make sure you update the
+                //validFlags array as well present in the CommandSettings.cs
                 public static class Flags
                 {
                     public static readonly string AcceptTeeEula = "acceptteeeula";
@@ -95,6 +97,7 @@ namespace Microsoft.VisualStudio.Services.Agent
                     public static readonly string AddMachineGroupTags = "addmachinegrouptags";
                     public static readonly string Commit = "commit";
                     public static readonly string DeploymentGroup = "deploymentgroup";
+                    public static readonly string DisableScreenSaver = "disablescreensaver";
                     public static readonly string EnableAutoLogon = "enableautologon";
                     public static readonly string Help = "help";
                     public static readonly string MachineGroup = "machinegroup";

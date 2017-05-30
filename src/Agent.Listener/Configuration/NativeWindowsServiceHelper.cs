@@ -1,4 +1,6 @@
 #if OS_WINDOWS
+using Microsoft.VisualStudio.Services.Agent.Util;
+using Microsoft.Win32;
 using System;
 using System.Collections;
 using System.ComponentModel;
@@ -10,8 +12,6 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Threading;
-using Microsoft.VisualStudio.Services.Agent.Util;
-using Microsoft.Win32;
 
 namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 {
@@ -36,8 +36,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         bool GrantUserLogonAsServicePrivilage(string domain, string userName);
 
-        bool IsValidCredential(string domain, string userName, string logonPassword);
-
+        bool IsValidCredential(string domain, string userName, string logonPassword);        
+        
         NTAccount GetDefaultServiceAccount();
 
         NTAccount GetDefaultAdminServiceAccount();
@@ -63,6 +63,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         void SetAutoLogonPassword(string password);
 
         bool IsRunningInElevatedMode();
+
+        void LoadUserProfile(string domain, string userName, string logonPassword, out IntPtr tokenHandle, out PROFILEINFO userProfile);
+
+        void UnloadUserProfile(IntPtr tokenHandle, PROFILEINFO userProfile);
+
+        bool IsValidAutoLogonCredential(string domain, string userName, string logonPassword);
     }
 
     public class NativeWindowsServiceHelper : AgentService, INativeWindowsServiceHelper
@@ -372,32 +378,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public bool IsValidCredential(string domain, string userName, string logonPassword)
         {
-            Trace.Entering();
-            IntPtr tokenHandle = IntPtr.Zero;
+            return IsValidCredentialInternal(domain, userName, logonPassword, LOGON32_LOGON_NETWORK);
+        }
 
-            ArgUtil.NotNullOrEmpty(userName, nameof(userName));
-
-            Trace.Info($"Verify credential for account {userName}.");
-            int result = LogonUser(userName, domain, logonPassword, LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT, out tokenHandle);
-
-            if (tokenHandle.ToInt32() != 0)
-            {
-                if (!CloseHandle(tokenHandle))
-                {
-                    Trace.Error("Failed during CloseHandle on token from LogonUser");
-                }
-            }
-
-            if (result != 0)
-            {
-                Trace.Info($"Credential for account '{userName}' is valid.");
-                return true;
-            }
-            else
-            {
-                Trace.Info($"Credential for account '{userName}' is invalid.");
-                return false;
-            }
+        public bool IsValidAutoLogonCredential(string domain, string userName, string logonPassword)
+        {
+            return IsValidCredentialInternal(domain, userName, logonPassword, LOGON32_LOGON_INTERACTIVE);            
         }
 
         public NTAccount GetDefaultServiceAccount()
@@ -779,23 +765,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     tfsKey.Dispose();
                 }
             }
-        }
-
-        private byte[] GetSidBinaryFromWindows(string domain, string user)
-        {
-            try
-            {
-                SecurityIdentifier sid = (SecurityIdentifier)new NTAccount(StringUtil.Format("{0}\\{1}", domain, user).TrimStart('\\')).Translate(typeof(SecurityIdentifier));
-                byte[] binaryForm = new byte[sid.BinaryLength];
-                sid.GetBinaryForm(binaryForm, 0);
-                return binaryForm;
-            }
-            catch (Exception exception)
-            {
-                Trace.Error(exception);
-                return null;
-            }
-        }
+        }        
 
         public bool HasActiveSession(string domainName, string userName)
         {
@@ -820,6 +790,109 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         public bool IsRunningInElevatedMode()
         {
             return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+        }
+
+        public void LoadUserProfile(string domain, string userName, string logonPassword, out IntPtr tokenHandle, out PROFILEINFO userProfile)
+        {
+            Trace.Entering();
+            tokenHandle = IntPtr.Zero;
+
+            ArgUtil.NotNullOrEmpty(userName, nameof(userName));
+            if(LogonUser(userName, domain, logonPassword, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT, out tokenHandle) == 0)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            userProfile = new PROFILEINFO();
+            userProfile.dwSize = Marshal.SizeOf(typeof(PROFILEINFO));
+            userProfile.lpUserName = userName;
+            if (!LoadUserProfile(tokenHandle, ref userProfile))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            
+            Trace.Info($"Successfully loaded the profile for {domain}\\{userName}.");
+        }
+
+        public void UnloadUserProfile(IntPtr tokenHandle, PROFILEINFO userProfile)
+        {
+            Trace.Entering();
+            
+            if(tokenHandle == IntPtr.Zero)
+            {
+                Trace.Verbose("The handle to unload user profile is not set. Returning.");
+            }
+
+            
+            if (!UnloadUserProfile(tokenHandle, userProfile.hProfile))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+            
+            Trace.Info($"Successfully unloaded the profile for {userProfile.lpUserName}.");
+        }
+
+        public struct ReturnCode
+        {
+            public const int S_OK = 0;
+            public const int ERROR_ACCESS_DENIED = 5;
+            public const int ERROR_INVALID_PARAMETER = 87;
+            public const int ERROR_MEMBER_NOT_IN_ALIAS = 1377; // member not in a group            
+            public const int ERROR_MEMBER_IN_ALIAS = 1378; // member already exists
+            public const int ERROR_ALIAS_EXISTS = 1379;  // group already exists
+            public const int ERROR_NO_SUCH_ALIAS = 1376;
+            public const int ERROR_NO_SUCH_MEMBER = 1387;
+            public const int ERROR_INVALID_MEMBER = 1388;
+            public const int NERR_GroupNotFound = 2220;
+            public const int NERR_GroupExists = 2223;
+            public const int NERR_UserInGroup = 2236;
+            public const uint STATUS_ACCESS_DENIED = 0XC0000022; //NTSTATUS error code: Access Denied
+        }
+
+        private bool IsValidCredentialInternal(string domain, string userName, string logonPassword, UInt32 logonType)
+        {
+            Trace.Entering();
+            IntPtr tokenHandle = IntPtr.Zero;
+
+            ArgUtil.NotNullOrEmpty(userName, nameof(userName));
+
+            Trace.Info($"Verify credential for account {userName}.");
+            int result = LogonUser(userName, domain, logonPassword, logonType, LOGON32_PROVIDER_DEFAULT, out tokenHandle);
+
+            if (tokenHandle.ToInt32() != 0)
+            {
+                if (!CloseHandle(tokenHandle))
+                {
+                    Trace.Error("Failed during CloseHandle on token from LogonUser");
+                }
+            }
+
+            if (result != 0)
+            {
+                Trace.Info($"Credential for account '{userName}' is valid.");
+                return true;
+            }
+            else
+            {
+                Trace.Info($"Credential for account '{userName}' is invalid.");
+                return false;
+            }
+        }
+
+        private byte[] GetSidBinaryFromWindows(string domain, string user)
+        {
+            try
+            {
+                SecurityIdentifier sid = (SecurityIdentifier)new NTAccount(StringUtil.Format("{0}\\{1}", domain, user).TrimStart('\\')).Translate(typeof(SecurityIdentifier));
+                byte[] binaryForm = new byte[sid.BinaryLength];
+                sid.GetBinaryForm(binaryForm, 0);
+                return binaryForm;
+            }
+            catch (Exception exception)
+            {
+                Trace.Error(exception);
+                return null;
+            }
         }
 
         // Helper class not to repeat whenever we deal with LSA* api
@@ -1029,6 +1102,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
         }
 
+        // Class to represent a failure action which consists of a recovery
+        // action type and an action delay
+        private class FailureAction
+        {
+            // Property to set recover action type
+            public RecoverAction Type { get; set; }
+            // Property to set recover action delay
+            public int Delay { get; set; }
+
+            // Constructor
+            public FailureAction(RecoverAction actionType, int actionDelay)
+            {
+                Type = actionType;
+                Delay = actionDelay;
+            }
+        }
+
         internal enum LSA_AccessPolicy : long
         {
             POLICY_VIEW_LOCAL_INFORMATION = 0x00000001L,
@@ -1057,24 +1147,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             public IntPtr Buffer;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        public struct PROFILEINFO
-        {
-            public int dwSize;
-            public int dwFlags;
-            [MarshalAs(UnmanagedType.LPTStr)]
-            public String lpUserName;
-            [MarshalAs(UnmanagedType.LPTStr)]
-            public String lpProfilePath;
-            [MarshalAs(UnmanagedType.LPTStr)]
-            public String lpDefaultPath;
-            [MarshalAs(UnmanagedType.LPTStr)]
-            public String lpServerName;
-            [MarshalAs(UnmanagedType.LPTStr)]
-            public String lpPolicyPath;
-            public IntPtr hProfile;
-        }
-
         [DllImport("advapi32.dll", SetLastError = true, PreserveSig = true)]
         public static extern uint LsaStorePrivateData(
             IntPtr policyHandle,
@@ -1087,10 +1159,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             uint status
         );
 
-        // Declaration of external pinvoke functions
-        private static readonly string s_logonAsServiceName = "SeServiceLogonRight";
-
+        private static UInt32 LOGON32_LOGON_INTERACTIVE = 2;
         private const UInt32 LOGON32_LOGON_NETWORK = 3;
+
+        // Declaration of external pinvoke functions
+        private static readonly string s_logonAsServiceName = "SeServiceLogonRight";        
+
         private const UInt32 LOGON32_PROVIDER_DEFAULT = 0;
 
         private const int SERVICE_WIN32_OWN_PROCESS = 0x00000010;
@@ -1114,24 +1188,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                                    }
                            };
             }
-        }
-
-        public struct ReturnCode
-        {
-            public const int S_OK = 0;
-            public const int ERROR_ACCESS_DENIED = 5;
-            public const int ERROR_INVALID_PARAMETER = 87;
-            public const int ERROR_MEMBER_NOT_IN_ALIAS = 1377; // member not in a group            
-            public const int ERROR_MEMBER_IN_ALIAS = 1378; // member already exists
-            public const int ERROR_ALIAS_EXISTS = 1379;  // group already exists
-            public const int ERROR_NO_SUCH_ALIAS = 1376;
-            public const int ERROR_NO_SUCH_MEMBER = 1387;
-            public const int ERROR_INVALID_MEMBER = 1388;
-            public const int NERR_GroupNotFound = 2220;
-            public const int NERR_GroupExists = 2223;
-            public const int NERR_UserInGroup = 2236;
-            public const uint STATUS_ACCESS_DENIED = 0XC0000022; //NTSTATUS error code: Access Denied
-        }
+        }        
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct LocalGroupInfo
@@ -1168,23 +1225,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             public string lpCommand;
             public int cActions;
             public long lpsaActions;
-        }
-
-        // Class to represent a failure action which consists of a recovery
-        // action type and an action delay
-        private class FailureAction
-        {
-            // Property to set recover action type
-            public RecoverAction Type { get; set; }
-            // Property to set recover action delay
-            public int Delay { get; set; }
-
-            // Constructor
-            public FailureAction(RecoverAction actionType, int actionDelay)
-            {
-                Type = actionType;
-                Delay = actionDelay;
-            }
         }
 
         [Flags]
@@ -1303,6 +1343,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern int LogonUser(string userName, string domain, string password, uint logonType, uint logonProvider, out IntPtr tokenHandle);
 
+        [DllImport("userenv.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern Boolean LoadUserProfile(IntPtr hToken, ref PROFILEINFO lpProfileInfo);
+
+        [DllImport("userenv.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern Boolean UnloadUserProfile(IntPtr hToken, IntPtr hProfile);
+
         [DllImport("kernel32", SetLastError = true)]
         public static extern bool CloseHandle(IntPtr handle);
 
@@ -1345,6 +1391,24 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         [DllImport("kernel32.dll")]
         static extern uint GetLastError();
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PROFILEINFO
+    {
+        public int dwSize;
+        public int dwFlags;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public String lpUserName;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public String lpProfilePath;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public String lpDefaultPath;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public String lpServerName;
+        [MarshalAs(UnmanagedType.LPTStr)]
+        public String lpPolicyPath;
+        public IntPtr hProfile;
     }
 }
 #endif

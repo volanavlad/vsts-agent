@@ -104,7 +104,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Util
 
         public static string GetAutoLogonSettingsFilePath()
         {
-            return Path.Combine(GetRootPath(), ".autologonsettings");
+            return Path.Combine(GetRootPath(), ".autologon");
         }
 
         public static string GetWorkPath(IHostContext hostContext)

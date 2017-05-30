@@ -336,10 +336,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 serviceControlManager.ConfigureService(agentSettings, command);
             }
             //This will be enabled with AutoLogon code changes are tested
-            else
+            else if (command.GetEnableAutoLogon())
             {                
-                ConfigureAutoLogonIfNeeded(command);
-                //Imp: The machine may restart if the autologon user is not same as the current user
+                Trace.Info("Agent is going to run as process setting up the 'AutoLogon' capability for the agent.");
+                var autoLogonConfigManager = HostContext.GetService<IAutoLogonManager>();
+                await autoLogonConfigManager.ConfigureAsync(command);
+                //Important: The machine may restart if the autologon user is not same as the current user
                 //if you are adding code after this, keep that in mind
             }
 
@@ -377,7 +379,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     //running as process, unconfigure autologon if it was configured                    
                     if (_store.IsAutoLogonConfigured())
                     {
-                        var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
+                        var autoLogonConfigManager = HostContext.GetService<IAutoLogonManager>();
                         autoLogonConfigManager.Unconfigure();                        
                     }
                     else
@@ -466,30 +468,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 throw;
             }
         }
-
-#if OS_WINDOWS
-        private void ConfigureAutoLogonIfNeeded(CommandSettings command)
-        {
-            Trace.Entering();
-
-            if (!command.GetEnableAutoLogon())
-            {
-                return;
-            }
-
-            Trace.Info("Agent is going to run as process setting up the 'AutoLogon' capability for the agent.");
-            try
-            {                
-                var autoLogonConfigManager = HostContext.GetService<IAutoLogonConfigurationManager>();
-                autoLogonConfigManager.Configure(command);
-            }
-            catch(Exception ex)
-            {
-                Trace.Error(ex);
-                _term.WriteLine(StringUtil.Loc("AutoLogonConfigurationFailureMessage"));
-            }
-        }
-#endif
   
         private ICredentialProvider GetCredentialProvider(CommandSettings command, string serverUrl)
         {

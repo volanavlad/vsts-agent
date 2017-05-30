@@ -1,7 +1,7 @@
+using Microsoft.VisualStudio.Services.Agent.Util;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Threading;
-using Microsoft.VisualStudio.Services.Agent.Util;
 
 namespace Microsoft.VisualStudio.Services.Agent
 {
@@ -57,9 +57,6 @@ namespace Microsoft.VisualStudio.Services.Agent
 
         [DataMember(EmitDefaultValue = false)]
         public string CollectionName { get; set; }
-
-        [DataMember(EmitDefaultValue = false)]
-        public string AutoLogonUserName { get; set; }
     }
 
     [DataContract]
