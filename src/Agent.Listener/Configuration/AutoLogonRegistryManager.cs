@@ -14,6 +14,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     {        
         void UpdateRegistrySettings(CommandSettings command, string domainName, string userName, string logonPassword);
         void RevertRegistrySettings(string domainName, string userName);
+        //used to log all the autologon related registry settings when agent is running
+        void DumpAutoLogonRegistrySettings();
     }
 
     public class AutoLogonRegistryManager : AgentService, IAutoLogonRegistryManager
@@ -37,11 +39,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             try
             {
                 string securityId = _windowsServiceHelper.GetSecurityId(domainName, userName);
-                if(string.IsNullOrEmpty(securityId))
-                {
-                    Trace.Error($"Security Id not found for the user ({domainName}\\{userName}). Cannot proceed with autologon configuration.");
-                    throw new InvalidOperationException(StringUtil.Loc("SIdNotFound", domainName, userName, "configuration"));
-                }
 
                 //check if the registry exists for the user, if not load the user profile
                 if(!_registryManager.SubKeyExists(RegistryHive.Users, securityId))
@@ -77,17 +74,91 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         public void RevertRegistrySettings(string domainName, string userName)
         {
             string securityId = _windowsServiceHelper.GetSecurityId(domainName, userName);
-            if(string.IsNullOrEmpty(securityId))
-            {
-                Trace.Error($"Security Id not found for the user ({domainName}\\{userName}). Cannot proceed with autologon unconfiguration.");
-                throw new InvalidOperationException(StringUtil.Loc("SIdNotFound", domainName, userName, "unconfiguration"));
-            }
-
+            
             //machine specific            
             RevertAutoLogonSpecificSettings(domainName, userName);
 
             //user specific
             RevertUserSpecificSettings(RegistryHive.Users, securityId);
+        }
+
+        public void DumpAutoLogonRegistrySettings()
+        {
+            Trace.Info("");
+            Trace.Info("Dump from the registry for autologon related settings");            
+
+            Trace.Info("****Machine specific policies/settings****");
+            if (_registryManager.SubKeyExists(RegistryHive.LocalMachine, RegistryConstants.MachineSettings.SubKeys.ShutdownReasonDomainPolicy))
+            {
+                var shutDownReasonSubKey = RegistryConstants.MachineSettings.SubKeys.ShutdownReasonDomainPolicy;
+                var shutDownReasonValueName = RegistryConstants.MachineSettings.ValueNames.ShutdownReason;                
+                var shutdownReasonValue = _registryManager.GetValue(RegistryHive.LocalMachine, shutDownReasonSubKey, shutDownReasonValueName);
+                Trace.Info($"Shutdown reason domain policy. Subkey - {shutDownReasonSubKey} ValueName - {shutDownReasonValueName} : {shutdownReasonValue}");
+            }
+            else
+            {
+                Trace.Info($"Shutdown reason domain policy not found.");
+            }
+            
+            if (_registryManager.SubKeyExists(RegistryHive.LocalMachine, RegistryConstants.MachineSettings.SubKeys.LegalNotice))
+            {
+                var legalNoticeSubKey = RegistryConstants.MachineSettings.SubKeys.LegalNotice;
+                var captionValueName = RegistryConstants.MachineSettings.ValueNames.LegalNoticeCaption;
+                //legal caption/text                
+                var legalNoticeCaption = _registryManager.GetValue(RegistryHive.LocalMachine, legalNoticeSubKey, captionValueName);
+                //we must avoid printing the text/caption in the logs as it is user data
+                var isLegalNoticeCaptionDefined = !string.IsNullOrEmpty(legalNoticeCaption);
+                Trace.Info($"Legal notice caption - Subkey - {legalNoticeSubKey} ValueName - {captionValueName}. Is defined - {legalNoticeCaption}");
+                
+                var textValueName = RegistryConstants.MachineSettings.ValueNames.LegalNoticeText;
+                var legalNoticeText =  _registryManager.GetValue(RegistryHive.LocalMachine, legalNoticeSubKey, textValueName);
+                var isLegalNoticeTextDefined = !string.IsNullOrEmpty(legalNoticeCaption);
+                Trace.Info($"Legal notice text - Subkey - {legalNoticeSubKey} ValueName - {textValueName}. Is defined - {isLegalNoticeTextDefined}");
+            }
+            else
+            {
+                Trace.Info($"LegalNotice caption/text not defined");
+            }
+
+            var autoLogonSubKey = RegistryConstants.MachineSettings.SubKeys.AutoLogon;
+            var valueName = RegistryConstants.MachineSettings.ValueNames.AutoLogon;
+            var isAutoLogonEnabled = _registryManager.GetValue(RegistryHive.LocalMachine, autoLogonSubKey, valueName);
+            Trace.Info($"AutoLogon. Subkey -  {autoLogonSubKey}. ValueName - {valueName} : {isAutoLogonEnabled} (0-disabled, 1-enabled)");
+
+            var userValueName = RegistryConstants.MachineSettings.ValueNames.AutoLogonUserName;
+            var domainValueName = RegistryConstants.MachineSettings.ValueNames.AutoLogonDomainName;
+            var userName = _registryManager.GetValue(RegistryHive.LocalMachine, autoLogonSubKey, userValueName);
+            var domainName = _registryManager.GetValue(RegistryHive.LocalMachine, autoLogonSubKey, domainValueName);
+            Trace.Info($"AutoLogonUser. Subkey -  {autoLogonSubKey}. ValueName - {userValueName} : {userName}");
+            Trace.Info($"AutoLogonUser. Subkey -  {autoLogonSubKey}. ValueName - {domainValueName} : {domainName}");
+
+            Trace.Info("");
+            Trace.Info("****User specific policies/settings****");
+            var screenSaverPolicySubKeyName = RegistryConstants.UserSettings.SubKeys.ScreenSaverDomainPolicy;
+            var screenSaverValueName = RegistryConstants.UserSettings.ValueNames.ScreenSaver;
+            if(_registryManager.SubKeyExists(RegistryHive.CurrentUser, screenSaverPolicySubKeyName))
+            {                
+                var screenSaverSettingValue = _registryManager.GetValue(RegistryHive.CurrentUser, screenSaverPolicySubKeyName, screenSaverValueName);
+                Trace.Info($"Screensaver policy.  SubKey - {screenSaverPolicySubKeyName} ValueName - {screenSaverValueName} : {screenSaverSettingValue} (1- defined)");
+            }
+            else
+            {
+                Trace.Info($"Screen saver domain policy doesnt exist");
+            }
+
+            Trace.Info("****User specific settings****");
+            
+            var  screenSaverSettingSubKeyName = RegistryConstants.UserSettings.SubKeys.ScreenSaver;
+            var screenSaverSettingValueName = RegistryConstants.UserSettings.ValueNames.ScreenSaver;            
+            var screenSaverValue = _registryManager.GetValue(RegistryHive.CurrentUser, screenSaverSettingSubKeyName, screenSaverSettingValueName);
+            Trace.Info($"Screensaver - SubKey - {screenSaverSettingSubKeyName}, ValueName - {screenSaverSettingValueName} : {screenSaverValue} (0-disabled, 1-enabled)");
+
+            var startupSubKeyName = RegistryConstants.UserSettings.SubKeys.StartupProcess;
+            var startupValueName = RegistryConstants.UserSettings.ValueNames.StartupProcess;
+            var startupProcessPath = _registryManager.GetValue(RegistryHive.CurrentUser, startupSubKeyName, startupValueName);
+            Trace.Info($"Startup process SubKey - {startupSubKeyName} ValueName - {startupValueName} : {startupProcessPath}");
+
+            Trace.Info("");
         }
 
         private void RevertAutoLogonSpecificSettings(string domainName, string userName)

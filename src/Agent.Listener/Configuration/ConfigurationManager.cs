@@ -20,7 +20,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     public interface IConfigurationManager : IAgentService
     {
         bool IsConfigured();
-        bool IsServiceConfigured();
         Task ConfigureAsync(CommandSettings command);
         Task UnconfigureAsync(CommandSettings command);
         AgentSettings LoadSettings();
@@ -39,14 +38,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             _store = hostContext.GetService<IConfigurationStore>();
             Trace.Verbose("store created");
             _term = hostContext.GetService<ITerminal>();
-        }
-
-        //TODO: We shall remove this API and promote the usage of store API directly.
-        public bool IsServiceConfigured()
-        {
-            bool result = _store.IsServiceConfigured();
-            Trace.Info($"Is service configured: {result}");
-            return result;
         }
 
         public bool IsConfigured()

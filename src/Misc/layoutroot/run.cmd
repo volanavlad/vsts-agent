@@ -36,4 +36,4 @@ powershell.exe -NoLogo -Sta -NoProfile -NonInteractive -ExecutionPolicy Unrestri
 rem ********************************************************************************
 rem Run the listener process.
 rem ********************************************************************************
-"%~dp0bin\Agent.Listener.exe" run --startuptype manualinteractive%*
+"%~dp0bin\Agent.Listener.exe" run %*

@@ -24,6 +24,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests
         private Tracing _trace;
         private AssemblyLoadContext _loadContext;
         private List<string> _tempDirectorys = new List<string>();
+        private StartupType _startupType;
         public event EventHandler Unloading;
 
         public TestHostContext(object testClass, [CallerMemberName] string testName = "")
@@ -65,6 +66,18 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests
         public CultureInfo DefaultCulture { get; private set; }
 
         public string TraceFileName { get; private set; }
+
+        public StartupType StartupType
+        { 
+            get 
+            {
+                return _startupType;
+            }
+            set
+            {
+                _startupType = value;
+            } 
+        }
 
         public async Task Delay(TimeSpan delay, CancellationToken token)
         {
