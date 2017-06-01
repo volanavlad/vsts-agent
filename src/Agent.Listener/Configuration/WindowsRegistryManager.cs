@@ -1,4 +1,4 @@
-#if OS_WINDOWS
+// #if OS_WINDOWS
 using Microsoft.Win32;
 using Microsoft.VisualStudio.Services.Agent.Util;
 using System;
@@ -50,7 +50,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             {
                 if(key == null)
                 {
-                    //todo: create subkey
+                    //today all the subkeys are well defined and exist on the machine. 
+                    //having following in the logs is very less likely but good to log such occurances
+                    Trace.Warning($"Couldnt get the subkey '{subKeyName}. Will not be able to set the value.");
                     return;
                 }
 
@@ -81,14 +83,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                     key = Registry.LocalMachine.OpenSubKey(subKeyName, writable);                    
                     break;
             }
-
-            if (key == null)
-            {
-                throw new InvalidOperationException($"No registry key found with the name as {subKeyName}.");
-            }
-
             return key;
         }
     }
 }
-#endif
+// #endif

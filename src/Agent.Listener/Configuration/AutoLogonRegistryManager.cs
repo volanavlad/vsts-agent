@@ -108,7 +108,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 var legalNoticeCaption = _registryManager.GetValue(RegistryHive.LocalMachine, legalNoticeSubKey, captionValueName);
                 //we must avoid printing the text/caption in the logs as it is user data
                 var isLegalNoticeCaptionDefined = !string.IsNullOrEmpty(legalNoticeCaption);
-                Trace.Info($"Legal notice caption - Subkey - {legalNoticeSubKey} ValueName - {captionValueName}. Is defined - {legalNoticeCaption}");
+                Trace.Info($"Legal notice caption - Subkey - {legalNoticeSubKey} ValueName - {captionValueName}. Is defined - {isLegalNoticeCaptionDefined}");
                 
                 var textValueName = RegistryConstants.MachineSettings.ValueNames.LegalNoticeText;
                 var legalNoticeText =  _registryManager.GetValue(RegistryHive.LocalMachine, legalNoticeSubKey, textValueName);
@@ -139,7 +139,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             if(_registryManager.SubKeyExists(RegistryHive.CurrentUser, screenSaverPolicySubKeyName))
             {                
                 var screenSaverSettingValue = _registryManager.GetValue(RegistryHive.CurrentUser, screenSaverPolicySubKeyName, screenSaverValueName);
-                Trace.Info($"Screensaver policy.  SubKey - {screenSaverPolicySubKeyName} ValueName - {screenSaverValueName} : {screenSaverSettingValue} (1- defined)");
+                Trace.Info($"Screensaver policy.  SubKey - {screenSaverPolicySubKeyName} ValueName - {screenSaverValueName} : {screenSaverSettingValue} (1- enabled)");
             }
             else
             {

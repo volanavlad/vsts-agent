@@ -59,6 +59,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         string GetSecurityId(string domainName, string userName);
         
         void SetAutoLogonPassword(string password);
+        
+        void ResetAutoLogonPassword();
 
         bool IsRunningInElevatedMode();
 
@@ -780,6 +782,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
         }
 
+        public void ResetAutoLogonPassword()
+        {
+            using (LsaPolicy lsaPolicy = new LsaPolicy(LSA_AccessPolicy.POLICY_CREATE_SECRET))
+            {
+                lsaPolicy.SetSecretData(LsaPolicy.DefaultPassword, null);
+            }
+        }
+
         public bool IsRunningInElevatedMode()
         {
             return new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
@@ -932,7 +942,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 secretName.Length = (UInt16)(key.Length * charSize);
                 secretName.MaximumLength = (UInt16)((key.Length + 1) * charSize);
 
-                if (value.Length > 0)
+                if (value != null && value.Length > 0)
                 {
                     // Create data and key
                     secretData.Buffer = Marshal.StringToHGlobalUni(value);
