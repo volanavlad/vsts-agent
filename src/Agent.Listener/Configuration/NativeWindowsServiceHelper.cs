@@ -36,7 +36,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         bool GrantUserLogonAsServicePrivilage(string domain, string userName);
 
-        bool IsValidCredential(string domain, string userName, string logonPassword);        
+        bool IsValidCredential(string domain, string userName, string logonPassword);
         
         NTAccount GetDefaultServiceAccount();
 
@@ -825,7 +825,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             {
                 Trace.Verbose("The handle to unload user profile is not set. Returning.");
             }
-
             
             if (!UnloadUserProfile(tokenHandle, userProfile.hProfile))
             {
@@ -833,23 +832,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             }
             
             Trace.Info($"Successfully unloaded the profile for {userProfile.lpUserName}.");
-        }
-
-        public struct ReturnCode
-        {
-            public const int S_OK = 0;
-            public const int ERROR_ACCESS_DENIED = 5;
-            public const int ERROR_INVALID_PARAMETER = 87;
-            public const int ERROR_MEMBER_NOT_IN_ALIAS = 1377; // member not in a group            
-            public const int ERROR_MEMBER_IN_ALIAS = 1378; // member already exists
-            public const int ERROR_ALIAS_EXISTS = 1379;  // group already exists
-            public const int ERROR_NO_SUCH_ALIAS = 1376;
-            public const int ERROR_NO_SUCH_MEMBER = 1387;
-            public const int ERROR_INVALID_MEMBER = 1388;
-            public const int NERR_GroupNotFound = 2220;
-            public const int NERR_GroupExists = 2223;
-            public const int NERR_UserInGroup = 2236;
-            public const uint STATUS_ACCESS_DENIED = 0XC0000022; //NTSTATUS error code: Access Denied
         }
 
         private bool IsValidCredentialInternal(string domain, string userName, string logonPassword, UInt32 logonType)
@@ -975,23 +957,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             internal static string DefaultPassword = "DefaultPassword";
         }
 
-        // Class to represent a failure action which consists of a recovery
-        // action type and an action delay
-        private class FailureAction
-        {
-            // Property to set recover action type
-            public RecoverAction Type { get; set; }
-            // Property to set recover action delay
-            public int Delay { get; set; }
-
-            // Constructor
-            public FailureAction(RecoverAction actionType, int actionDelay)
-            {
-                Type = actionType;
-                Delay = actionDelay;
-            }
-        }
-
         internal enum LSA_AccessPolicy : long
         {
             POLICY_VIEW_LOCAL_INFORMATION = 0x00000001L,
@@ -1008,16 +973,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             POLICY_LOOKUP_NAMES = 0x00000800L,
             POLICY_NOTIFICATION = 0x00001000L,
             POLICY_ALL_ACCESS = 0x00001FFFL
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct LSA_UNICODE_STRING
-        {
-            public UInt16 Length;
-            public UInt16 MaximumLength;
-
-            // We need to use an IntPtr because if we wrap the Buffer with a SafeHandle-derived class, we get a failure during LsaAddAccountRights
-            public IntPtr Buffer;
         }
 
         [DllImport("advapi32.dll", SetLastError = true, PreserveSig = true)]
@@ -1061,7 +1016,24 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                                    }
                            };
             }
-        }        
+        }
+
+        public struct ReturnCode
+        {
+            public const int S_OK = 0;
+            public const int ERROR_ACCESS_DENIED = 5;
+            public const int ERROR_INVALID_PARAMETER = 87;
+            public const int ERROR_MEMBER_NOT_IN_ALIAS = 1377; // member not in a group            
+            public const int ERROR_MEMBER_IN_ALIAS = 1378; // member already exists
+            public const int ERROR_ALIAS_EXISTS = 1379;  // group already exists
+            public const int ERROR_NO_SUCH_ALIAS = 1376;
+            public const int ERROR_NO_SUCH_MEMBER = 1387;
+            public const int ERROR_INVALID_MEMBER = 1388;
+            public const int NERR_GroupNotFound = 2220;
+            public const int NERR_GroupExists = 2223;
+            public const int NERR_UserInGroup = 2236;
+            public const uint STATUS_ACCESS_DENIED = 0XC0000022; //NTSTATUS error code: Access Denied
+        }     
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         public struct LocalGroupInfo
@@ -1070,6 +1042,16 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             public string Name;
             [MarshalAs(UnmanagedType.LPWStr)]
             public string Comment;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct LSA_UNICODE_STRING
+        {
+            public UInt16 Length;
+            public UInt16 MaximumLength;
+
+            // We need to use an IntPtr because if we wrap the Buffer with a SafeHandle-derived class, we get a failure during LsaAddAccountRights
+            public IntPtr Buffer;
         }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -1098,6 +1080,23 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             public string lpCommand;
             public int cActions;
             public long lpsaActions;
+        }
+
+        // Class to represent a failure action which consists of a recovery
+        // action type and an action delay
+        private class FailureAction
+        {
+            // Property to set recover action type
+            public RecoverAction Type { get; set; }
+            // Property to set recover action delay
+            public int Delay { get; set; }
+
+            // Constructor
+            public FailureAction(RecoverAction actionType, int actionDelay)
+            {
+                Type = actionType;
+                Delay = actionDelay;
+            }
         }
 
         [Flags]

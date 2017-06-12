@@ -39,6 +39,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             try
             {
                 string securityId = _windowsServiceHelper.GetSecurityId(domainName, userName);
+                if(string.IsNullOrEmpty(securityId))
+                {
+                    Trace.Error($"Could not find the Security ID for the user '{domainName}\\{userName}'. AutoLogon will not be configured.");                    
+                    throw new Exception(StringUtil.Loc("InvalidSIDForUser", domainName, userName));
+                }
 
                 //check if the registry exists for the user, if not load the user profile
                 if(!_registryManager.SubKeyExists(RegistryHive.Users, securityId))
@@ -56,10 +61,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
                 ShowAutoLogonWarningIfAlreadyEnabled(domainName, userName);
 
-                //machine specific
+                //machine specific settings, i.e., autologon
                 UpdateMachineSpecificRegistrySettings(domainName, userName);
 
-                //user specific
+                //user specific, i.e., screensaver and startup process
                 UpdateUserSpecificRegistrySettings(command, securityId);
             }
             finally
@@ -74,6 +79,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         public void RevertRegistrySettings(string domainName, string userName)
         {
             string securityId = _windowsServiceHelper.GetSecurityId(domainName, userName);
+            if(string.IsNullOrEmpty(securityId))
+            {
+                Trace.Error($"Could not find the Security ID for the user '{domainName}\\{userName}'. Unconfiguration of AutoLogon is not possible.");
+                throw new Exception(StringUtil.Loc("InvalidSIDForUser", domainName, userName));
+            }
             
             //machine specific            
             RevertAutoLogonSpecificSettings(domainName, userName);
@@ -84,9 +94,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public void DumpAutoLogonRegistrySettings()
         {
-            Trace.Info("");
-            Trace.Info("Dump from the registry for autologon related settings");            
-
+            Trace.Info("Dump from the registry for autologon related settings");
             Trace.Info("****Machine specific policies/settings****");
             if (_registryManager.SubKeyExists(RegistryHive.LocalMachine, RegistryConstants.MachineSettings.SubKeys.ShutdownReasonDomainPolicy))
             {
@@ -132,7 +140,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             Trace.Info($"AutoLogonUser. Subkey -  {autoLogonSubKey}. ValueName - {userValueName} : {userName}");
             Trace.Info($"AutoLogonUser. Subkey -  {autoLogonSubKey}. ValueName - {domainValueName} : {domainName}");
 
-            Trace.Info("");
             Trace.Info("****User specific policies/settings****");
             var screenSaverPolicySubKeyName = RegistryConstants.UserSettings.SubKeys.ScreenSaverDomainPolicy;
             var screenSaverValueName = RegistryConstants.UserSettings.ValueNames.ScreenSaver;
@@ -277,7 +284,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             TakeBackupAndSetValue(RegistryHive.Users, subKeyName, RegistryConstants.UserSettings.ValueNames.StartupProcess, GetStartupCommand());
         }
 
-        private void UpdateScreenSaverSettings(CommandSettings command, string securityId= null)
+        private void UpdateScreenSaverSettings(CommandSettings command, string securityId)
         {
             if(!command.GetDisableScreenSaver())
             {
@@ -306,10 +313,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         private string GetStartupCommand()
         {
             //startup process            
-            string cmdExePath = System.Environment.GetEnvironmentVariable("comspec");
+            string cmdExePath = Environment.GetEnvironmentVariable("comspec");
             if (string.IsNullOrEmpty(cmdExePath))
             {
-                cmdExePath = "cmd.exe";
+                Trace.Error("Unable to get the path for cmd.exe.");
+                throw new Exception(StringUtil.Loc("FilePathNotFound", "cmd.exe"));
             }
 
             //file to run in cmd.exe

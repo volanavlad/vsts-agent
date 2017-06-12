@@ -30,8 +30,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         {
             Trace.Entering();
 
-            var windowsServiceHelper = HostContext.GetService<INativeWindowsServiceHelper>();
-            if (!windowsServiceHelper.IsRunningInElevatedMode())
+            if (!_windowsServiceHelper.IsRunningInElevatedMode())
             {
                 Trace.Error("Needs Administrator privileges for configure agent as windows service.");
                 throw new SecurityException(StringUtil.Loc("NeedAdminForConfigAgentWinService"));
@@ -175,8 +174,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public void UnconfigureService()
         {
-            var windowsServiceHelper = HostContext.GetService<INativeWindowsServiceHelper>();
-            if (!windowsServiceHelper.IsRunningInElevatedMode())
+            if (!_windowsServiceHelper.IsRunningInElevatedMode())
             {
                 Trace.Error("Needs Administrator privileges for unconfigure windows service agent.");
                 throw new SecurityException(StringUtil.Loc("NeedAdminForUnconfigWinServiceAgent"));

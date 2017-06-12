@@ -40,7 +40,6 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             if (!_windowsServiceHelper.IsRunningInElevatedMode())
             {
                 Trace.Error("Needs Administrator privileges to configure agent with AutoLogon capability.");
-                Trace.Info("You will need to unconfigure the agent and then re-configure with Administrative rights");
                 throw new SecurityException(StringUtil.Loc("NeedAdminForAutologonCapability"));
             }
 
@@ -70,7 +69,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 if (command.Unattended)
                 {
                     throw new SecurityException(StringUtil.Loc("InvalidAutoLogonCredential"));
-                }                   
+                }
                     
                 Trace.Error("Invalid credential entered.");
                 _terminal.WriteError(StringUtil.Loc("InvalidAutoLogonCredential"));
@@ -83,7 +82,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             
             SaveAutoLogonSettings(domainName, userName);
             RestartBasedOnUserInput(command);
-        }       
+        }
 
         public void Unconfigure()
         {
@@ -166,14 +165,14 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 var whichUtil = HostContext.GetService<IWhichUtil>();
                 var shutdownExePath = whichUtil.Which("shutdown.exe");
 
-                Trace.Info("Restarting the machine in 5 seconds");
-                _terminal.WriteLine(StringUtil.Loc("RestartIn5SecMessage"));
+                Trace.Info("Restarting the machine in 15 seconds");
+                _terminal.WriteLine(StringUtil.Loc("RestartIn15SecMessage"));
                 string msg = StringUtil.Loc("ShutdownMessage");
                 //we are not using ProcessInvoker here as today it is not designed for 'fire and forget' pattern
                 //ExecuteAsync API of ProcessInvoker waits for the process to exit
-                var args = $@"-r -t 5 -c ""{msg}""";
+                var args = $@"-r -t 15 -c ""{msg}""";
                 Trace.Info($"Shutdown.exe path - {shutdownExePath}. Arguments - {args}");
-                Process.Start(shutdownExePath, $@"-r -t 5 -c ""{msg}""");
+                Process.Start(shutdownExePath, $@"{args} ""{msg}""");
             }
             else
             {

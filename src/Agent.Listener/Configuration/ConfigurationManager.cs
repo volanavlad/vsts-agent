@@ -459,7 +459,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 throw;
             }
         }
-  
+
         private ICredentialProvider GetCredentialProvider(CommandSettings command, string serverUrl)
         {
             Trace.Info(nameof(GetCredentialProvider));

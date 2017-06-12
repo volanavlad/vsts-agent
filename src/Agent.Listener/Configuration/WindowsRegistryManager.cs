@@ -1,4 +1,4 @@
-// #if OS_WINDOWS
+#if OS_WINDOWS
 using Microsoft.Win32;
 using Microsoft.VisualStudio.Services.Agent.Util;
 using System;
@@ -19,8 +19,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
     public class WindowsRegistryManager : AgentService, IWindowsRegistryManager
     {
         public void DeleteValue(RegistryHive hive, string subKeyName, string name)
-        {
-            
+        {            
             using(RegistryKey key = OpenRegistryKey(hive, subKeyName, true))
             {
                 if (key != null)
@@ -87,4 +86,4 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         }
     }
 }
-// #endif
+#endif

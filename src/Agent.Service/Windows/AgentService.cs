@@ -50,7 +50,6 @@ namespace AgentService
                                 lock (ServiceLock)
                                 {
                                     AgentListener = CreateAgentListener();
-                                    WriteInfo(string.Format("Agent.Listner.exe arguments - {0}", AgentListener.StartInfo.Arguments));
                                     AgentListener.OutputDataReceived += AgentListener_OutputDataReceived;
                                     AgentListener.ErrorDataReceived += AgentListener_ErrorDataReceived;
                                     AgentListener.Start();
