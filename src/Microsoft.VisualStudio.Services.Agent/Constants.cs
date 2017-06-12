@@ -199,8 +199,10 @@ namespace Microsoft.VisualStudio.Services.Agent
             public static class Path
             {
                 public static readonly string ArtifactsDirectory = "a";
+                public static readonly string CommitsDirectory = "c";
                 public static readonly string DefinitionMapping = "DefinitionMapping.json";
                 public static readonly string ReleaseDirectoryPrefix = "r";
+                public static readonly string ReleaseTempDirectoryPrefix = "t";
                 public static readonly string RootMappingDirectory = "ReleaseRootMapping";
             }
         }
@@ -216,6 +218,7 @@ namespace Microsoft.VisualStudio.Services.Agent
                 //
                 // Keep alphabetical
                 //
+                public static readonly string AllowAllEndpoints = "agent.allowAllEndpoints"; // remove after sprint 120 or so.
                 public static readonly string BuildDirectory = "agent.builddirectory";
                 public static readonly string HomeDirectory = "agent.homedirectory";
                 public static readonly string Id = "agent.id";
