@@ -478,6 +478,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             public class ValueNames
             {
                 public const string ScreenSaver = "ScreenSaveActive";
+                //Value name in the startup tasks list. Every startup task has a name and the command to run.
+                //the command gets filled up during AutoLogon configuration
                 public const string StartupProcess = "VSTSAgent";
             }
         }

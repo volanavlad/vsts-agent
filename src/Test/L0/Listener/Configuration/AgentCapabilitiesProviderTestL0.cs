@@ -5,8 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Xunit;
 using System.Threading.Tasks;
+using Xunit;
 
 namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 {

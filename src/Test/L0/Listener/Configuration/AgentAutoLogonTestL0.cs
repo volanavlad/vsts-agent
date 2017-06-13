@@ -2,6 +2,7 @@
 using Microsoft.VisualStudio.Services.Agent.Listener.Configuration;
 using Microsoft.VisualStudio.Services.Agent.Listener;
 using Microsoft.VisualStudio.Services.Agent.Util;
+using Microsoft.Win32;
 using Moq;
 using System;
 using System.Collections.Generic;
@@ -9,7 +10,6 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using Microsoft.Win32;
 
 namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
 {
