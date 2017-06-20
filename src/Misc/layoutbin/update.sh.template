@@ -122,8 +122,8 @@ date "+[%F %T-%4N] Update succeed" >> "$logfile"
 
 # rename the update log file with %logfile%.succeed/.failed/succeedneedrestart
 # agent service host can base on the log file name determin the result of the agent update
-date "+[%F %T-%4N] Rename $logfile to be $logfile.succeed" >> "$logfile" 2>&1
-mv -fv "$logfile" "$logfile.succeed" >> "$logfile" 2>&1
+date "+[%F %T-%4N] Rename $logfile to be $logfile.succeedneedrestart" >> "$logfile" 2>&1
+mv -fv "$logfile" "$logfile.succeedneedrestart" >> "$logfile" 2>&1
 
 # restart interactive agent if needed
 if [ $restartinteractiveagent -ne 0 ]

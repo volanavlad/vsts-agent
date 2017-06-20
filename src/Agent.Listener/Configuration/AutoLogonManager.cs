@@ -171,8 +171,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                 //we are not using ProcessInvoker here as today it is not designed for 'fire and forget' pattern
                 //ExecuteAsync API of ProcessInvoker waits for the process to exit
                 var args = $@"-r -t 15 -c ""{msg}""";
-                Trace.Info($"Shutdown.exe path - {shutdownExePath}. Arguments - {args}");
-                Process.Start(shutdownExePath, $@"{args} ""{msg}""");
+                Trace.Info($"Shutdown.exe path: {shutdownExePath}. Arguments: {args}");
+                Process.Start(shutdownExePath, $@"{args}");
             }
             else
             {

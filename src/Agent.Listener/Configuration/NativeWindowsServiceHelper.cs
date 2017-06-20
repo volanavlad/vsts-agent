@@ -37,7 +37,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         bool GrantUserLogonAsServicePrivilage(string domain, string userName);
 
         bool IsValidCredential(string domain, string userName, string logonPassword);
-        
+
         NTAccount GetDefaultServiceAccount();
 
         NTAccount GetDefaultAdminServiceAccount();

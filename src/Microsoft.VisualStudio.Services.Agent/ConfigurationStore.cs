@@ -153,7 +153,7 @@ namespace Microsoft.VisualStudio.Services.Agent
 
         public bool IsAutoLogonConfigured()
         {
-            Trace.Info("IsAutoLogonConfigured()");
+            Trace.Entering();
             bool autoLogonConfigured = (new FileInfo(_autoLogonSettingsFilePath)).Exists;
             Trace.Info($"IsAutoLogonConfigured: {autoLogonConfigured}");
             return autoLogonConfigured;
