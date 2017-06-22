@@ -151,7 +151,7 @@ namespace AgentService
             string exeLocation = Assembly.GetEntryAssembly().Location;
             string agentExeLocation = Path.Combine(Path.GetDirectoryName(exeLocation), "Agent.Listener.exe");
             Process newProcess = new Process();
-            newProcess.StartInfo = new ProcessStartInfo(agentExeLocation, "run --startuptype windowsservice");
+            newProcess.StartInfo = new ProcessStartInfo(agentExeLocation, "run --startuptype service");
             newProcess.StartInfo.CreateNoWindow = true;
             newProcess.StartInfo.UseShellExecute = false;
             newProcess.StartInfo.RedirectStandardInput = true;

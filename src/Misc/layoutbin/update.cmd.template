@@ -122,8 +122,8 @@ echo [%date% %time%] Update succeed >> "%logfile%" 2>&1
 
 rem rename the update log file with %logfile%.succeed/.failed/succeedneedrestart
 rem agent service host can base on the log file name determin the result of the agent update
-echo [%date% %time%] Rename "%logfile%" to be "%logfile%.succeedneedrestart" >> "%logfile%" 2>&1
-move "%logfile%" "%logfile%.succeedneedrestart" >nul
+echo [%date% %time%] Rename "%logfile%" to be "%logfile%.succeed" >> "%logfile%" 2>&1
+move "%logfile%" "%logfile%.succeed" >nul
 
 rem restart interactive agent if needed
 if %restartinteractiveagent% equ 1 (

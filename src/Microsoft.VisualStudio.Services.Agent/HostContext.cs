@@ -30,7 +30,7 @@ namespace Microsoft.VisualStudio.Services.Agent
     public enum StartupType
     {
         ManualInteractive,
-        WindowsService,
+        Service,
         AutoStartup
     }
 

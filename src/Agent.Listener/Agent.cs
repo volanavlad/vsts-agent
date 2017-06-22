@@ -124,7 +124,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
 
                 Trace.Verbose($"Configured as service: '{configuredAsService}'");
 
-                //Get the startup type of the agent i.e., autostartup, windowsservice, manualinteractive
+                //Get the startup type of the agent i.e., autostartup, service, manualinteractive
                 var startupTypeAsString = command.GetStartupType();
                 if(!Enum.TryParse(startupTypeAsString, true, out StartupType startType))
                 {                    
@@ -142,7 +142,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
 #if OS_WINDOWS
                 if (store.IsAutoLogonConfigured())
                 {
-                    if(HostContext.StartupType != StartupType.WindowsService)
+                    if(HostContext.StartupType != StartupType.Service)
                     {
                         Trace.Info($"Autologon is configured on the machine, dumping all the autologon related registry settings");
                         var autoLogonRegManager = HostContext.GetService<IAutoLogonRegistryManager>();
@@ -155,7 +155,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener
                 }
 #endif
 
-                return await RunAsync(TokenSource.Token, settings, HostContext.StartupType == StartupType.WindowsService);
+                return await RunAsync(TokenSource.Token, settings, HostContext.StartupType == StartupType.Service);
 
                 //}
 
