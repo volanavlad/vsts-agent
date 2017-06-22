@@ -36,7 +36,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Capabilities
             Add(capabilities, "Agent.OSVersion", GetOSVersionString());
             Add(capabilities, "Cmd", Environment.GetEnvironmentVariable("comspec"));
 #endif
-            var isRunningInInteractiveMode = HostContext.StartupType != StartupType.WindowsService;
+            var isRunningInInteractiveMode = HostContext.StartupType != StartupType.Service;
             Add(capabilities, "InteractiveSession", isRunningInInteractiveMode.ToString());
             Add(capabilities, "Agent.Version", Constants.Agent.Version);
             Add(capabilities, "Agent.ComputerName", Environment.MachineName ?? string.Empty);

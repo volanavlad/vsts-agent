@@ -50,7 +50,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener
                 hc.StartupType = StartupType.AutoStartup;
                 await VerifyInteractiveSessionCapability(hc, tokenSource.Token, true);
 
-                hc.StartupType = StartupType.WindowsService;
+                hc.StartupType = StartupType.Service;
                 await VerifyInteractiveSessionCapability(hc, tokenSource.Token, false);
 
                 hc.StartupType = StartupType.ManualInteractive;
