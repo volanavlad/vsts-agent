@@ -35,6 +35,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Capabilities
             Add(capabilities, "Agent.OSVersion", GetOSVersionString());
             Add(capabilities, "Cmd", Environment.GetEnvironmentVariable("comspec"));
 #endif
+            Add(capabilities, "Agent.Interactive", HostContext.InteractiveSession.ToString());
+
+            Add(capabilities, "Agent.STDIN", Console.IsInputRedirected.ToString());
+            Add(capabilities, "Agent.STDOUT", Console.IsOutputRedirected.ToString());
+            Add(capabilities, "Agent.STDERR", Console.IsErrorRedirected.ToString());
+
             Add(capabilities, "Agent.Version", Constants.Agent.Version);
             Add(capabilities, "Agent.ComputerName", Environment.MachineName ?? string.Empty);
             return Task.FromResult(capabilities);

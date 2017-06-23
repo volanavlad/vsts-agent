@@ -27,6 +27,7 @@ namespace Microsoft.VisualStudio.Services.Agent
         CancellationToken AgentShutdownToken { get; }
         ShutdownReason AgentShutdownReason { get; }
         void ShutdownAgent(ShutdownReason reason);
+        bool InteractiveSession { get; }
     }
 
     public sealed class HostContext : EventListener, IObserver<DiagnosticListener>, IObserver<KeyValuePair<string, object>>, IHostContext, IDisposable
@@ -39,6 +40,7 @@ namespace Microsoft.VisualStudio.Services.Agent
         private readonly ConcurrentDictionary<Type, Type> _serviceTypes = new ConcurrentDictionary<Type, Type>();
         private CancellationTokenSource _agentShutdownTokenSource = new CancellationTokenSource();
 
+        private string _hostType;
         private Tracing _trace;
         private Tracing _vssTrace;
         private Tracing _httpTrace;
@@ -50,10 +52,27 @@ namespace Microsoft.VisualStudio.Services.Agent
         public event EventHandler Unloading;
         public CancellationToken AgentShutdownToken => _agentShutdownTokenSource.Token;
         public ShutdownReason AgentShutdownReason { get; private set; }
+
+        public bool InteractiveSession
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_hostType) || _hostType.Equals("Worker", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new NotSupportedException(_hostType);
+                }
+                else
+                {
+                    return !Console.IsOutputRedirected && !Console.IsErrorRedirected;
+                }
+            }
+        }
+
         public HostContext(string hostType, string logFile = null)
         {
             // Validate args.
             ArgUtil.NotNullOrEmpty(hostType, nameof(hostType));
+            _hostType = hostType;
 
             _loadContext = AssemblyLoadContext.GetLoadContext(typeof(HostContext).GetTypeInfo().Assembly);
             _loadContext.Unloading += LoadContext_Unloading;
