@@ -96,11 +96,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener.Configuration
 
             _agentServer.Setup(x => x.ConnectAsync(It.IsAny<VssConnection>())).Returns(Task.FromResult<object>(null));
             _machineGroupServer.Setup(x => x.ConnectAsync(It.IsAny<VssConnection>())).Returns(Task.FromResult<object>(null));
-            _machineGroupServer.Setup(x => x.UpdateDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()));
-            _machineGroupServer.Setup(x => x.AddDeploymentMachineAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<DeploymentMachine>())).Returns(Task.FromResult(expectedDeploymentMachine));
-            _machineGroupServer.Setup(x => x.ReplaceDeploymentMachineAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DeploymentMachine>())).Returns(Task.FromResult(expectedDeploymentMachine));
-            _machineGroupServer.Setup(x => x.GetDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>())).Returns(Task.FromResult(new List<DeploymentMachine>() { }));
-            _machineGroupServer.Setup(x => x.DeleteDeploymentMachineAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>())).Returns(Task.FromResult<object>(null));
+            _machineGroupServer.Setup(x => x.UpdateDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()));
+            _machineGroupServer.Setup(x => x.AddDeploymentTargetAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<DeploymentMachine>())).Returns(Task.FromResult(expectedDeploymentMachine));
+            _machineGroupServer.Setup(x => x.ReplaceDeploymentTargetAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<DeploymentMachine>())).Returns(Task.FromResult(expectedDeploymentMachine));
+            _machineGroupServer.Setup(x => x.GetDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>())).Returns(Task.FromResult(new List<DeploymentMachine>() { }));
+            _machineGroupServer.Setup(x => x.DeleteDeploymentTargetAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>())).Returns(Task.FromResult<object>(null));
             _netFrameworkUtil.Setup(x => x.Test(It.IsAny<Version>())).Returns(true);
 
             _store.Setup(x => x.IsConfigured()).Returns(false);
@@ -211,7 +211,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener.Configuration
 
                 // For build and release agent, tags logic should not get trigger
                 _machineGroupServer.Verify(x =>
-                     x.UpdateDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
+                     x.UpdateDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
             }
         }
 
@@ -278,7 +278,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener.Configuration
 
                 // Tags logic should not get trigger
                 _machineGroupServer.Verify(x =>
-                    x.UpdateDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
+                    x.UpdateDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
             }
         }
 
@@ -348,7 +348,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener.Configuration
 
                 // Tags logic should not get trigger
                 _machineGroupServer.Verify(x =>
-                    x.UpdateDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
+                    x.UpdateDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
             }
         }
 
@@ -370,7 +370,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener.Configuration
             int receivedDeploymentGroupId = -1;
 
             _machineGroupServer.Setup(x =>
-                x.UpdateDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(),
+                x.UpdateDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(),
                     It.IsAny<List<DeploymentMachine>>())).Callback((Guid project, int deploymentGroupId, List<DeploymentMachine> deploymentMachine) =>
                     {
                         receivedProjectId = project;
@@ -441,7 +441,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener.Configuration
                 Assert.True(receivedDeploymentGroupId.Equals(expectedDeploymentGroupId), "UpdateDeploymentMachinesGroupAsync should get call with correct deployment group id");
                 // Tags logic should get trigger
                 _machineGroupServer.Verify(x =>
-                    x.UpdateDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(),
+                    x.UpdateDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(),
                         It.IsAny<List<DeploymentMachine>>()), Times.Once);
             }
         }

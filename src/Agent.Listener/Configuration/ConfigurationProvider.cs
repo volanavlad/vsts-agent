@@ -176,7 +176,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             var deploymentMachine = (await this.GetDeploymentMachinesAsync(agentSettings)).FirstOrDefault();
 
             deploymentMachine.Agent = agent;
-            deploymentMachine = await _deploymentGroupServer.ReplaceDeploymentMachineAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, deploymentMachine.Id, deploymentMachine);
+            deploymentMachine = await _deploymentGroupServer.ReplaceDeploymentTargetAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, deploymentMachine.Id, deploymentMachine);
 
             await GetAndAddTags(deploymentMachine, agentSettings, command);
             return deploymentMachine.Agent;
@@ -185,7 +185,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
         public async Task<TaskAgent> AddAgentAsync(AgentSettings agentSettings, TaskAgent agent, CommandSettings command)
         {
             var deploymentMachine = new DeploymentMachine() { Agent = agent };
-            deploymentMachine = await _deploymentGroupServer.AddDeploymentMachineAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, deploymentMachine);
+            deploymentMachine = await _deploymentGroupServer.AddDeploymentTargetAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, deploymentMachine);
 
             await GetAndAddTags(deploymentMachine, agentSettings, command);
 
@@ -201,11 +201,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             {
                 if (!string.IsNullOrWhiteSpace(agentSettings.ProjectId))
                 {
-                    await _deploymentGroupServer.DeleteDeploymentMachineAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, machine.Id);
+                    await _deploymentGroupServer.DeleteDeploymentTargetAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, machine.Id);
                 }
                 else
                 {
-                    await _deploymentGroupServer.DeleteDeploymentMachineAsync(agentSettings.ProjectName, agentSettings.DeploymentGroupId, machine.Id);
+                    await _deploymentGroupServer.DeleteDeploymentTargetAsync(agentSettings.ProjectName, agentSettings.DeploymentGroupId, machine.Id);
                 }
             }
         }
@@ -267,7 +267,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
                             Trace.Info("Adding tags - {0}", string.Join(",", tagsList.ToArray()));
 
                             deploymentMachine.Tags = tagsList;
-                            await _deploymentGroupServer.UpdateDeploymentMachinesAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, new List<DeploymentMachine>() { deploymentMachine });
+                            await _deploymentGroupServer.UpdateDeploymentTargetsAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, new List<DeploymentMachine>() { deploymentMachine });
 
                             _term.WriteLine(StringUtil.Loc("DeploymentGroupTagsAddedMsg"));
                         }
@@ -302,11 +302,11 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             List<DeploymentMachine> machines;
             if (!string.IsNullOrWhiteSpace(agentSettings.ProjectId))
             {
-                machines = await _deploymentGroupServer.GetDeploymentMachinesAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, agentSettings.AgentName);
+                machines = await _deploymentGroupServer.GetDeploymentTargetsAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, agentSettings.AgentName);
             }
             else
             {
-                machines = await _deploymentGroupServer.GetDeploymentMachinesAsync(agentSettings.ProjectName, agentSettings.DeploymentGroupId, agentSettings.AgentName);
+                machines = await _deploymentGroupServer.GetDeploymentTargetsAsync(agentSettings.ProjectName, agentSettings.DeploymentGroupId, agentSettings.AgentName);
             }
 
             return machines;
