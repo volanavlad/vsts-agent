@@ -173,7 +173,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public async Task<TaskAgent> UpdateAgentAsync(AgentSettings agentSettings, TaskAgent agent, CommandSettings command)
         {
-            var deploymentMachine = (await this.GetDeploymentMachinesAsync(agentSettings)).FirstOrDefault();
+            var deploymentMachine = (await this.GetDeploymentTargetsAsync(agentSettings)).FirstOrDefault();
 
             deploymentMachine.Agent = agent;
             deploymentMachine = await _deploymentGroupServer.ReplaceDeploymentTargetAsync(new Guid(agentSettings.ProjectId), agentSettings.DeploymentGroupId, deploymentMachine.Id, deploymentMachine);
@@ -194,7 +194,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public async Task DeleteAgentAsync(AgentSettings agentSettings)
         {
-            var machines = await GetDeploymentMachinesAsync(agentSettings);
+            var machines = await GetDeploymentTargetsAsync(agentSettings);
             Trace.Verbose("Returns {0} machines with name {1}", machines.Count, agentSettings.AgentName);
             var machine = machines.FirstOrDefault();
             if (machine != null)
@@ -233,7 +233,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
 
         public async Task<TaskAgent> GetAgentAsync(AgentSettings agentSettings)
         {
-            var machines = await GetDeploymentMachinesAsync(agentSettings);
+            var machines = await GetDeploymentTargetsAsync(agentSettings);
             Trace.Verbose("Returns {0} machines", machines.Count);
             var machine = machines.FirstOrDefault();
             if (machine != null)
@@ -297,7 +297,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Listener.Configuration
             return deploymentGroup;
         }
 
-        private async Task<List<DeploymentMachine>> GetDeploymentMachinesAsync(AgentSettings agentSettings)
+        private async Task<List<DeploymentMachine>> GetDeploymentTargetsAsync(AgentSettings agentSettings)
         {
             List<DeploymentMachine> machines;
             if (!string.IsNullOrWhiteSpace(agentSettings.ProjectId))
