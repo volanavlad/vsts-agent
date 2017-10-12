@@ -217,7 +217,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Tests.Listener.Configuration
 
                 // For build and release agent / deployment pool, tags logic should not get trigger;
                 _machineGroupServer.Verify(x =>
-                     x.UpdateDeploymentMachinesAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
+                     x.UpdateDeploymentTargetsAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<List<DeploymentMachine>>()), Times.Never);
             }
         }
 
