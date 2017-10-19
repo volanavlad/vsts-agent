@@ -913,7 +913,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             }
         }
 
-        public override async Task RunMaintenanceOperations(IExecutionContext executionContext, string repositoryPath, CancellationToken cancellationToken)
+        public override async Task RunMaintenanceOperations(IExecutionContext executionContext, string repositoryPath)
         {
             Trace.Entering();
             // Validate args.
@@ -950,7 +950,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 }
 
                 // git repack
-                int exitCode_repack = await _gitCommandManager.GitRepack(executionContext, repositoryPath, cancellationToken);
+                int exitCode_repack = await _gitCommandManager.GitRepack(executionContext, repositoryPath);
                 if (exitCode_repack != 0)
                 {
                     throw new InvalidOperationException($"Git repack failed with exit code: {exitCode_repack}");

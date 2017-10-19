@@ -297,6 +297,12 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             {
                 foreach (string gcFile in gcTrackingFiles)
                 {
+                    if (executionContext.CancellationToken.IsCancellationRequested)
+                    {
+                        // maintenance has been cancelled.
+                        break;
+                    }
+
                     try
                     {
                         var gcConfig = LoadIfExists(executionContext, gcFile) as TrackingConfig;

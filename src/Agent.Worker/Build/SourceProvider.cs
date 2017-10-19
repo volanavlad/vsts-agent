@@ -23,7 +23,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
 
         void SetVariablesInEndpoint(IExecutionContext executionContext, ServiceEndpoint endpoint);
 
-        Task RunMaintenanceOperations(IExecutionContext executionContext, string repositoryPath, CancellationToken cancellationToken);
+        Task RunMaintenanceOperations(IExecutionContext executionContext, string repositoryPath);
 
         bool TestOverrideBuildDirectory();
     }
@@ -89,7 +89,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             return null;
         }
         
-        public virtual Task RunMaintenanceOperations(IExecutionContext executionContext, string repositoryPath, CancellationToken cancellationToken)
+        public virtual Task RunMaintenanceOperations(IExecutionContext executionContext, string repositoryPath)
         {
             return Task.CompletedTask;
         }

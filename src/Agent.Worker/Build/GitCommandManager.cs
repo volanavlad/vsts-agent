@@ -84,8 +84,8 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
         Task<int> GitLFSLogs(IExecutionContext context, string repositoryPath);
 
         // git repack -adfl
-        Task<int> GitRepack(IExecutionContext context, string repositoryPath, CancellationToken cancellationToken);
-        
+        Task<int> GitRepack(IExecutionContext context, string repositoryPath);
+
         // git count-objects -v -H
         Task<int> GitCountObjects(IExecutionContext context, string repositoryPath);
 
@@ -408,10 +408,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
         }
 
         // git repack -adfl
-        public async Task<int> GitRepack(IExecutionContext context, string repositoryPath, CancellationToken cancellationToken)
+        public async Task<int> GitRepack(IExecutionContext context, string repositoryPath)
         {
             context.Debug("Compress .git directory.");
-            return await ExecuteGitCommandAsync(context, repositoryPath, "repack", "-adfl", cancellationToken);
+            return await ExecuteGitCommandAsync(context, repositoryPath, "repack", "-adfl");
         }
 
         // git count-objects -v -H
