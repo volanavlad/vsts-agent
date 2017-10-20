@@ -210,7 +210,7 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
             }
 
             // Sort the all tracking file ASC by last maintenance attempted time
-            foreach (var trackingFile in optimizeTrackingFiles.OrderBy(x => x.Item1.LastMaintenanceAttemptedOn))
+            foreach (var trackingInfo in optimizeTrackingFiles.OrderBy(x => x.Item1.LastMaintenanceAttemptedOn))
             {
                 if (executionContext.CancellationToken.IsCancellationRequested)
                 {
@@ -219,8 +219,9 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                 }
 
                 bool runMainenance = false;
-                TrackingConfig trackingInfo = trackingFile.Item1;
-                if (trackingInfo.LastMaintenanceAttemptedOn == null)
+                TrackingConfig trackingConfig = trackingInfo.Item1;
+                string trackingFile = trackingInfo.Item2;
+                if (trackingConfig.LastMaintenanceAttemptedOn == null)
                 {
                     // this folder never run maintenance before, we will do maintenance if there is more than half of the time remains.
                     if (totalTimeSpent.Elapsed.TotalMinutes < totalAvailableTime.TotalMinutes / 2)  // 50% time left
@@ -229,10 +230,10 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                     }
                     else
                     {
-                        executionContext.Output($"Working directory '{trackingInfo.BuildDirectory}' has never run maintenance before. Skip since we may not have enough time.");
+                        executionContext.Output($"Working directory '{trackingConfig.BuildDirectory}' has never run maintenance before. Skip since we may not have enough time.");
                     }
                 }
-                else if (trackingInfo.LastMaintenanceCompletedOn == null)
+                else if (trackingConfig.LastMaintenanceCompletedOn == null)
                 {
                     // this folder did finish maintenance last time, this might indicate we need more time for this working directory
                     if (totalTimeSpent.Elapsed.TotalMinutes < totalAvailableTime.TotalMinutes / 4)  // 75% time left
@@ -241,13 +242,13 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                     }
                     else
                     {
-                        executionContext.Output($"Working directory '{trackingInfo.BuildDirectory}' didn't finish maintenance last time. Skip since we may not have enough time.");
+                        executionContext.Output($"Working directory '{trackingConfig.BuildDirectory}' didn't finish maintenance last time. Skip since we may not have enough time.");
                     }
                 }
                 else
                 {
                     // estimate time for running maintenance
-                    TimeSpan estimateTime = trackingInfo.LastMaintenanceCompletedOn.Value - trackingInfo.LastMaintenanceAttemptedOn.Value;
+                    TimeSpan estimateTime = trackingConfig.LastMaintenanceCompletedOn.Value - trackingConfig.LastMaintenanceAttemptedOn.Value;
 
                     // there is more than 10 mins left after we run maintenance on this repository directory
                     if (totalAvailableTime.TotalMinutes > totalTimeSpent.Elapsed.TotalMinutes + estimateTime.TotalMinutes + 10)
@@ -256,22 +257,22 @@ namespace Microsoft.VisualStudio.Services.Agent.Worker.Build
                     }
                     else
                     {
-                        executionContext.Output($"Working directory '{trackingInfo.BuildDirectory}' may take about '{estimateTime.TotalMinutes}' mins to finish maintenance. It's too risky since we only have '{totalAvailableTime.TotalMinutes - totalTimeSpent.Elapsed.TotalMinutes}' mins left for maintenance.");
+                        executionContext.Output($"Working directory '{trackingConfig.BuildDirectory}' may take about '{estimateTime.TotalMinutes}' mins to finish maintenance. It's too risky since we only have '{totalAvailableTime.TotalMinutes - totalTimeSpent.Elapsed.TotalMinutes}' mins left for maintenance.");
                     }
                 }
 
                 if (runMainenance)
                 {
                     var extensionManager = HostContext.GetService<IExtensionManager>();
-                    ISourceProvider sourceProvider = extensionManager.GetExtensions<ISourceProvider>().FirstOrDefault(x => string.Equals(x.RepositoryType, trackingFile.Item1.RepositoryType, StringComparison.OrdinalIgnoreCase));
+                    ISourceProvider sourceProvider = extensionManager.GetExtensions<ISourceProvider>().FirstOrDefault(x => string.Equals(x.RepositoryType, trackingConfig.RepositoryType, StringComparison.OrdinalIgnoreCase));
                     if (sourceProvider != null)
                     {
                         try
                         {
-                            trackingManager.MaintenanceStarted(trackingFile.Item1, trackingFile.Item2);
-                            string repositoryPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Work), trackingFile.Item1.SourcesDirectory);
+                            trackingManager.MaintenanceStarted(trackingConfig, trackingFile);
+                            string repositoryPath = Path.Combine(HostContext.GetDirectory(WellKnownDirectory.Work), trackingConfig.SourcesDirectory);
                             await sourceProvider.RunMaintenanceOperations(executionContext, repositoryPath);
-                            trackingManager.MaintenanceCompleted(trackingFile.Item1, trackingFile.Item2);
+                            trackingManager.MaintenanceCompleted(trackingConfig, trackingFile);
                         }
                         catch (Exception ex)
                         {
